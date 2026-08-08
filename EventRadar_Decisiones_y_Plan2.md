@@ -28,31 +28,31 @@
 | 9 | **¿Presupuesto mensual estimado para APIs de IA?** | $0 (solo gratis) / hasta $20 USD / hasta $50 USD / más | 20 USD |
 | 10 | **¿Framework de orquestación de agentes?** | LangGraph / CrewAI / Autogen / Custom (sin framework) | custom |
 | 11 | **¿Base de datos?** | PostgreSQL / SQLite (dev) + PostgreSQL (prod) / Supabase | postgresql |
-| 12 | **¿ORM?** | SQLAlchemy / Tortoise ORM / Raw SQL | _________________ |
-| 13 | **¿API de geocodificación?** | Google Maps (paga, precisa) / Nominatim-OSM (gratis, menos precisa) / Ambas con fallback | _________________ |
-| 14 | **¿Librería de scraping principal?** | Scrapy / BeautifulSoup + requests / Playwright (headless browser) / Combinación | _________________ |
-| 15 | **¿Framework frontend?** | Next.js (SSR, mejor SEO) / Vite + React (SPA, más simple) / Astro | _________________ |
-| 16 | **¿Librería de mapas?** | Leaflet (gratis) / Mapbox GL (freemium, más lindo) / Google Maps JS | _________________ |
-| 17 | **¿Scheduler para ciclos automáticos?** | APScheduler (simple) / Celery + Redis (robusto) / Cron del sistema | _________________ |
+| 12 | **¿ORM?** | SQLAlchemy / Tortoise ORM / Raw SQL | tortoise orm |
+| 13 | **¿API de geocodificación?** | Google Maps (paga, precisa) / Nominatim-OSM (gratis, menos precisa) / Ambas con fallback | nominatim osm |
+| 14 | **¿Librería de scraping principal?** | Scrapy / BeautifulSoup + requests / Playwright (headless browser) / Combinación | combinación, scrapy para páginas estáticas + playwrright para páginas mas dinámicas |
+| 15 | **¿Framework frontend?** | Next.js (SSR, mejor SEO) / Vite + React (SPA, más simple) / Astro | Vite + React |
+| 16 | **¿Librería de mapas?** | Leaflet (gratis) / Mapbox GL (freemium, más lindo) / Google Maps JS | Leaflet |
+| 17 | **¿Scheduler para ciclos automáticos?** | APScheduler (simple) / Celery + Redis (robusto) / Cron del sistema | APScheduler |
 
 ### 1.3 🚀 Infraestructura y Deploy
 
 | # | Pregunta | Opciones | Nuestra decisión |
 |---|----------|----------|:----------------:|
-| 18 | **¿Dónde deployamos el MVP?** | Railway / Render / Fly.io / VPS (DigitalOcean/Hetzner) / Local solamente | _________________ |
-| 19 | **¿Presupuesto mensual para hosting?** | $0 (free tiers) / hasta $10 USD / hasta $25 USD | _________________ |
-| 20 | **¿Usamos Docker desde el inicio?** | Sí / Solo en producción / No | _________________ |
-| 21 | **¿Dominio propio?** | Sí (¿cuál?) / Subdominio del hosting (ej: eventradar.railway.app) | _________________ |
+| 18 | **¿Dónde deployamos el MVP?** | Railway / Render / Fly.io / VPS (DigitalOcean/Hetzner) / Local solamente | donweb |
+| 19 | **¿Presupuesto mensual para hosting?** | $0 (free tiers) / hasta $10 USD / hasta $25 USD | $15000 persos argentinos |
+| 20 | **¿Usamos Docker desde el inicio?** | Sí / Solo en producción / No | python nativo en local y todo docker en producción |
+| 21 | **¿Dominio propio?** | Sí (¿cuál?) / Subdominio del hosting (ej: eventradar.railway.app) | eventradar.net.ar |
 
 ### 1.4 👥 Organización del Equipo
 
 | # | Pregunta | Opciones | Nuestra decisión |
 |---|----------|----------|:----------------:|
-| 22 | **¿Cómo nos dividimos el trabajo?** | Por capa (uno backend, otro frontend) / Por feature / Pair programming | _________________ |
-| 23 | **¿Horas semanales dedicadas al proyecto?** | 5-10hs / 10-20hs / +20hs | _________________ |
-| 24 | **¿Fecha límite para el MVP funcional?** | ___ / ___ / 2026 | _________________ |
-| 25 | **¿Herramienta de gestión de tareas?** | GitHub Projects / Trello / Notion / Ninguna | _________________ |
-| 26 | **¿Estrategia de branching en Git?** | GitFlow / Trunk-based / Feature branches simples | _________________ |
+| 22 | **¿Cómo nos dividimos el trabajo?** | Por capa (uno backend, otro frontend) / Por feature / Pair programming | por agentes |
+| 23 | **¿Horas semanales dedicadas al proyecto?** | 5-10hs / 10-20hs / +20hs | 5-10 |
+| 24 | **¿Fecha límite para el MVP funcional?** | ___ / ___ / 2026 | 20/08/2026 |
+| 25 | **¿Herramienta de gestión de tareas?** | GitHub Projects / Trello / Notion / Ninguna | ninguna |
+| 26 | **¿Estrategia de branching en Git?** | GitFlow / Trunk-based / Feature branches simples | Trunk-based |
 
 ---
 
@@ -67,46 +67,46 @@ Para cada fuente de la lista inicial, completar:
 
 | Fuente | URL | ¿Tiene robots.txt que bloquea? | ¿Es contenido estático o dinámico (JS)? | ¿Los eventos están en texto o en imágenes? | ¿Tiene estructura predecible (clases CSS, JSON-LD)? | ¿Con qué frecuencia publican? | Viable para MVP |
 |--------|-----|:------------------------------:|:----------------------------------------:|:-------------------------------------------:|:----------------------------------------------------:|:-----------------------------:|:---------------:|
-| Fuente 1 | | ☐ Sí / ☐ No | ☐ Estático / ☐ Dinámico | ☐ Texto / ☐ Imagen / ☐ Ambos | ☐ Sí / ☐ No | | ☐ Sí / ☐ No |
-| Fuente 2 | | ☐ Sí / ☐ No | ☐ Estático / ☐ Dinámico | ☐ Texto / ☐ Imagen / ☐ Ambos | ☐ Sí / ☐ No | | ☐ Sí / ☐ No |
-| Fuente 3 | | ☐ Sí / ☐ No | ☐ Estático / ☐ Dinámico | ☐ Texto / ☐ Imagen / ☐ Ambos | ☐ Sí / ☐ No | | ☐ Sí / ☐ No |
-| Fuente 4 | | ☐ Sí / ☐ No | ☐ Estático / ☐ Dinámico | ☐ Texto / ☐ Imagen / ☐ Ambos | ☐ Sí / ☐ No | | ☐ Sí / ☐ No |
-| Fuente 5 | | ☐ Sí / ☐ No | ☐ Estático / ☐ Dinámico | ☐ Texto / ☐ Imagen / ☐ Ambos | ☐ Sí / ☐ No | | ☐ Sí / ☐ No |
+| Fuente 1 | https://www.facebook.com/people/Agenda-Cultural-Misiones/61557012325223 | ☐ Sí / X No | ☐ Estático / X Dinámico | ☐ Texto / ☐ Imagen / X Ambos | ☐ Sí / X No | DIARIO | X Sí / ☐ No |
+| Fuente 2 | https://ticketmisiones.com/ | ☐ Sí / X No | X Estático / ☐ Dinámico | ☐ Texto / ☐ Imagen / X Ambos | ☐ Sí / ☐ No / X NO SE | DIARIO | X Sí / ☐ No |
+| Fuente 3 | https://misionesonline.net/ | ☐ Sí / X No | X Estático / ☐ Dinámico | ☐ Texto / ☐ Imagen / X Ambos | ☐ Sí / ☐ No / X NO SE | DIARIO | X Sí / ☐ No |
+| Fuente 4 | https://misionescuatro.com/ | ☐ Sí / X No | X Estático / ☐ Dinámico | ☐ Texto / ☐ Imagen / X Ambos | ☐ Sí / ☐ No / X NO SE | DIARIO | X Sí / ☐ No |
+| Fuente 5 | https://www.facebook.com/GobiernoDeMisiones/?locale=es_LA | ☐ Sí / X No | ☐ Estático / X Dinámico | ☐ Texto / ☐ Imagen / X Ambos | ☐ Sí / ☐ No / X NO SE | DIARIO | X Sí / ☐ No |
 
 **Acciones:**
-- [ ] Elegir la ciudad objetivo y listar 10-15 fuentes candidatas
-- [ ] Visitar cada fuente y completar la tabla de arriba
-- [ ] Identificar al menos 5 fuentes viables para el MVP
-- [ ] Verificar si alguna fuente tiene API pública (Eventbrite, Ticketek, etc.)
+- [X] Elegir la ciudad objetivo y listar 10-15 fuentes candidatas
+- [X] Visitar cada fuente y completar la tabla de arriba
+- [X] Identificar al menos 5 fuentes viables para el MVP
+- [X] Verificar si alguna fuente tiene API pública (Eventbrite, Ticketek, etc.)
 
 ### 2.2 APIs Externas — Acceso y Costos
 
 | API / Servicio | ¿Necesita API key? | ¿Tiene free tier? | Límite free tier | Costo estimado MVP | ¿Ya tenemos la key? |
 |---------------|:-------------------:|:------------------:|:----------------:|:-------------------:|:--------------------:|
-| LLM (OpenAI / Claude / Gemini) | Sí | Varía | Varía | ~$10-30/mes | ☐ |
+| LLM (OpenAI / Claude / Gemini) | Sí | Varía | Varía | ~$10-30/mes | ✅ |
 | Google Maps Geocoding | Sí | Sí | $200 USD/mes crédito | Probablemente $0 | ☐ |
 | Nominatim (OSM) | No | Sí (gratis) | 1 req/seg | $0 | ✅ |
-| Google Vision API (OCR) | Sí | Sí | 1000 req/mes | Probablemente $0 | ☐ |
+| Google Vision API (OCR) | Sí | Sí | 1000 req/mes | Probablemente $0 | ✅ |
 | Mapbox (frontend) | Sí | Sí | 50k cargas/mes | Probablemente $0 | ☐ |
 | Leaflet (frontend) | No | Sí (gratis) | Sin límite | $0 | ✅ |
 
 **Acciones:**
-- [ ] Decidir qué LLM usar y crear la cuenta / obtener API key
-- [ ] Decidir geocodificación (Google vs OSM) y obtener key si aplica
-- [ ] Decidir si incluir OCR en MVP y obtener key si aplica
-- [ ] Calcular costo mensual estimado total
+- [X] Decidir qué LLM usar y crear la cuenta / obtener API key
+- [X] Decidir geocodificación (Google vs OSM) y obtener key si aplica
+- [X] Decidir si incluir OCR en MVP y obtener key si aplica
+- [X] Calcular costo mensual estimado total
 
 ### 2.3 Datos Históricos (Seed)
 
 > [!NOTE]
 > El documento menciona que ya cuentan con una base de datos inicial de eventos cargados manualmente. Verificar su estado.
 
-- [ ] ¿En qué formato están los datos históricos? (CSV, JSON, Excel, otro)
-- [ ] ¿Cuántos eventos tiene el dataset?
-- [ ] ¿De qué zona/ciudad son?
-- [ ] ¿Tienen todos los campos obligatorios (nombre, fecha, lugar, URL fuente)?
-- [ ] ¿Están limpios o necesitan preprocesamiento?
-- [ ] Convertir a formato `seed_events.json` estandarizado
+- [base de datos estructurada] ¿En qué formato están los datos históricos? (CSV, JSON, Excel, otro)
+- [aproximadamente 100] ¿Cuántos eventos tiene el dataset?
+- [Provincia de San Luis] ¿De qué zona/ciudad son?
+- [nombre, fecha de inicio, fecha de fin, lugar] ¿Tienen todos los campos obligatorios (nombre, fecha, lugar, URL fuente)?
+- [limpios] ¿Están limpios o necesitan preprocesamiento?
+- [X] Convertir a formato `seed_events.json` estandarizado
 
 ---
 
@@ -114,29 +114,29 @@ Para cada fuente de la lista inicial, completar:
 
 ### 3.1 Agente Analizador (NLP)
 
-| # | Pregunta | Impacto |
-|---|----------|---------|
-| 27 | ¿Usamos un único prompt grande que haga discriminación + extracción, o dos pasos separados? | Costo vs. precisión |
-| 28 | ¿Cuál es el threshold de confianza para aceptar un evento? (ej: ≥0.7, ≥0.8) | Más alto = menos eventos pero más precisos |
-| 29 | ¿Qué hacemos con eventos que tienen confianza media (ej: 0.5-0.7)? | ¿Descartar? ¿Marcar para revisión manual? |
-| 30 | ¿Cómo manejamos eventos recurrentes? (ej: "todos los sábados") | ¿Crear un evento por fecha? ¿Un solo registro? |
+| # | Pregunta | Impacto |  Respuesta |
+|---|----------|---------|---------|
+| 27 | ¿Usamos un único prompt grande que haga discriminación + extracción, o dos pasos separados? | Costo vs. precisión | un prompt |
+| 28 | ¿Cuál es el threshold de confianza para aceptar un evento? (ej: ≥0.7, ≥0.8) | Más alto = menos eventos pero más precisos | ≥0.7
+| 29 | ¿Qué hacemos con eventos que tienen confianza media (ej: 0.5-0.7)? | ¿Descartar? ¿Marcar para revisión manual? | Marcar para revisión manual
+| 30 | ¿Cómo manejamos eventos recurrentes? (ej: "todos los sábados") | ¿Crear un evento por fecha? ¿Un solo registro? | Un solo registro
 
 ### 3.2 Agente Evaluador (Duplicados)
 
-| # | Pregunta | Impacto |
-|---|----------|---------|
-| 31 | ¿Qué algoritmo de fuzzy matching usamos para detectar duplicados? | Levenshtein / cosine similarity / LLM |
-| 32 | ¿Cuál es el threshold de similitud para considerar duplicado? | Muy bajo = pierde duplicados. Muy alto = falsos duplicados |
-| 33 | Si un evento aparece en 2 fuentes, ¿nos quedamos con el de la fuente más confiable? | Lógica de merge |
+| # | Pregunta | Impacto | Respuesta
+|---|----------|---------|---------|
+| 31 | ¿Qué algoritmo de fuzzy matching usamos para detectar duplicados? | Levenshtein / cosine similarity / LLM | rapidfuzz y Levenshtein
+| 32 | ¿Cuál es el threshold de similitud para considerar duplicado? | Muy bajo = pierde duplicados. Muy alto = falsos duplicados | ≥0.5
+| 33 | Si un evento aparece en 2 fuentes, ¿nos quedamos con el de la fuente más confiable? | Lógica de merge | Nos quedamos con el de la fuente más confiable
 
 ### 3.3 Frontend y UX
 
-| # | Pregunta | Impacto |
-|---|----------|---------|
-| 34 | ¿El usuario necesita crear cuenta/loguearse? | No en MVP (según doc), pero confirmar |
-| 35 | ¿Mostramos el puntaje de calidad del evento al usuario? | Transparencia vs. complejidad visual |
-| 36 | ¿Cómo manejamos eventos sin imagen? | Placeholder por categoría / Ícono genérico |
-| 37 | ¿Idioma de la interfaz? | Solo español / Español + Inglés |
+| # | Pregunta | Impacto | Respuesta
+|---|----------|---------|---------|
+| 34 | ¿El usuario necesita crear cuenta/loguearse? | No en MVP (según doc), pero confirmar | NO
+| 35 | ¿Mostramos el puntaje de calidad del evento al usuario? | Transparencia vs. complejidad visual | NO
+| 36 | ¿Cómo manejamos eventos sin imagen? | Placeholder por categoría / Ícono genérico | Placeholder por categoría
+| 37 | ¿Idioma de la interfaz? | Solo español / Español + Inglés | Español
 
 ---
 
