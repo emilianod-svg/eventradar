@@ -1,0 +1,1 @@
+"""EventRadar backend application package."""

@@ -1,0 +1,124 @@
+:root {
+  color-scheme: light;
+  --color-bg: #ffffff;
+  --color-text: #1a1a1a;
+  --color-primary: #0b5fff;
+  --color-error-bg: #fdecec;
+  --color-error-text: #7a1212;
+  --color-ok-bg: #eafaf0;
+  --color-ok-text: #14532d;
+  --focus-ring: 3px solid #0b5fff;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+
+/* Foco visible para navegación por teclado (sección 15.5 del plan) */
+a:focus-visible,
+button:focus-visible,
+input:focus-visible,
+[role="button"]:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.app-header {
+  padding: 1.5rem 1rem;
+  text-align: center;
+}
+
+.app-header h1 {
+  margin: 0 0 0.25rem;
+  font-size: 1.75rem;
+}
+
+.status-banner {
+  margin: 1rem auto;
+  max-width: 640px;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  text-align: center;
+}
+
+.status-banner--loading {
+  background: #eef1f5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.status-banner--error {
+  background: var(--color-error-bg);
+  color: var(--color-error-text);
+}
+
+.status-banner--ok {
+  background: var(--color-ok-bg);
+  color: var(--color-ok-text);
+}
+
+.spinner {
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid #b9c2cf;
+  border-top-color: var(--color-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.empty-state {
+  max-width: 480px;
+  margin: 2rem auto;
+  text-align: center;
+  color: #4b5563;
+}
+
+.event-card {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.event-card__image {
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  object-fit: cover;
+  background: #f1f5f9;
+}
+
+.event-card__body {
+  padding: 0.75rem 1rem;
+}
+
+.event-card__meta {
+  margin: 0.15rem 0;
+  color: #4b5563;
+  font-size: 0.9rem;
+}
+
+.event-card__price {
+  font-weight: 600;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation: none;
+  }
+}
