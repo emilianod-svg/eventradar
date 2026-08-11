@@ -1,0 +1,42 @@
+[
+  {
+    "name": "Ticket Misiones",
+    "adapter_type": "SCRAPY_STATIC",
+    "base_url": null,
+    "active": false,
+    "reliability_score": 0.5,
+    "notes": "URL exacta pendiente de confirmación por el equipo (no inventada)."
+  },
+  {
+    "name": "Misiones Online",
+    "adapter_type": "SCRAPY_STATIC",
+    "base_url": null,
+    "active": false,
+    "reliability_score": 0.5,
+    "notes": "URL exacta pendiente de confirmación por el equipo (no inventada)."
+  },
+  {
+    "name": "Misiones Cuatro",
+    "adapter_type": "SCRAPY_STATIC",
+    "base_url": null,
+    "active": false,
+    "reliability_score": 0.5,
+    "notes": "URL exacta pendiente de confirmación por el equipo (no inventada)."
+  },
+  {
+    "name": "Agenda Cultural Misiones",
+    "adapter_type": "FACEBOOK",
+    "base_url": null,
+    "active": false,
+    "reliability_score": 0.5,
+    "notes": "Requiere decisión de estrategia Facebook (sección 3.2 del plan) antes de activar. ENABLE_FACEBOOK_ADAPTER=false por defecto."
+  },
+  {
+    "name": "Gobierno de Misiones",
+    "adapter_type": "FACEBOOK",
+    "base_url": null,
+    "active": false,
+    "reliability_score": 0.5,
+    "notes": "Fallback sugerido por el plan: web oficial pública si Facebook no es viable (sección 8.4)."
+  }
+]

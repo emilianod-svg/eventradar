@@ -1,0 +1,43 @@
+# Evita enviar al contexto del agente artefactos generados, dependencias y
+# secretos. No ignora código fuente, migraciones, fixtures pequeños,
+# documentación ni archivos de lock (regla obligatoria del prompt de
+# inicialización).
+
+# --- Dependencias y entornos virtuales ---
+**/node_modules/
+**/.venv/
+**/venv/
+**/env/
+
+# --- Builds y cobertura ---
+**/dist/
+**/build/
+**/htmlcov/
+**/*.egg-info/
+
+# --- Caches, logs y temporales ---
+**/__pycache__/
+**/.pytest_cache/
+**/.mypy_cache/
+**/.ruff_cache/
+**/.vite/
+*.log
+**/logs/
+**/tmp/
+
+# --- Secretos y archivos de entorno ---
+.env
+.env.*
+!.env.example
+**/*credentials*.json
+**/*.pem
+**/*.key
+
+# --- Dumps, volúmenes y datasets pesados ---
+**/*.sql.gz
+**/*.dump
+data/local/
+
+# --- Artefactos binarios generados ---
+**/*.pyc
+**/*.pyo

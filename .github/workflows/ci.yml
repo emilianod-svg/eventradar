@@ -1,0 +1,162 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# Permisos mínimos por defecto; cada job los eleva solo si lo necesita.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  NODE_VERSION: "24"
+
+jobs:
+  backend:
+    name: Backend (lint, types, tests)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_DB: eventradar_test
+          POSTGRES_USER: eventradar
+          POSTGRES_PASSWORD: eventradar
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U eventradar -d eventradar_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: backend/pyproject.toml
+
+      - name: Instalar dependencias
+        working-directory: backend
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e ".[dev]"
+
+      - name: Lint (ruff)
+        working-directory: backend
+        run: ruff check .
+
+      - name: Formato (ruff format --check)
+        working-directory: backend
+        run: ruff format --check .
+
+      - name: Type checking (mypy)
+        working-directory: backend
+        run: mypy app
+
+      - name: Tests
+        working-directory: backend
+        env:
+          # Habilita los tests marcados @pytest.mark.integration contra el
+          # servicio de PostgreSQL de este job.
+          TEST_DATABASE_URL: postgres://eventradar:eventradar@localhost:5432/eventradar_test
+          DATABASE_URL: postgres://eventradar:eventradar@localhost:5432/eventradar_test
+          ADMIN_API_KEY: ci-only-not-a-secret
+        run: pytest --cov=app --cov-report=term-missing
+
+      - name: Auditoría de dependencias (pip-audit)
+        working-directory: backend
+        run: |
+          pip install pip-audit
+          pip-audit || echo "::warning::pip-audit reportó hallazgos; revisar antes de producción."
+
+  frontend:
+    name: Frontend (lint, types, tests, build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Instalar dependencias
+        working-directory: frontend
+        run: |
+          if [ -f package-lock.json ]; then
+            npm ci
+          else
+            echo "::warning::No hay package-lock.json versionado; usando npm install. Generar y commitear el lockfile es un pendiente P0."
+            npm install
+          fi
+
+      - name: Lint (eslint)
+        working-directory: frontend
+        run: npm run lint
+
+      - name: Type checking
+        working-directory: frontend
+        run: npm run typecheck
+
+      - name: Tests
+        working-directory: frontend
+        env:
+          VITE_API_URL: http://localhost:8000
+        run: npm test
+
+      - name: Build
+        working-directory: frontend
+        env:
+          VITE_API_URL: http://localhost:8000
+        run: npm run build
+
+      - name: Auditoría de dependencias (npm audit)
+        working-directory: frontend
+        run: npm audit --audit-level=high || echo "::warning::npm audit reportó hallazgos; revisar antes de producción."
+
+  docker-build:
+    name: Validar Dockerfiles (build sin push)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build imagen backend
+        uses: docker/build-push-action@v6
+        with:
+          context: backend
+          push: false
+          tags: eventradar-backend:ci
+
+      - name: Build imagen frontend
+        uses: docker/build-push-action@v6
+        with:
+          context: frontend
+          push: false
+          tags: eventradar-frontend:ci
+          build-args: |
+            VITE_API_URL=http://localhost:8000
+
+  secret-scan:
+    name: Escaneo de secretos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
