@@ -3,10 +3,14 @@
 from tortoise import fields
 from tortoise.models import Model
 
+from app.models.classification import Classification
+
 
 class ReviewItem(Model):
     id = fields.UUIDField(pk=True)
-    classification = fields.ForeignKeyField("models.Classification", related_name="review_items")
+    classification: fields.ForeignKeyRelation[Classification] = fields.ForeignKeyField(
+        "models.Classification", related_name="review_items"
+    )
     status = fields.CharField(max_length=20, default="PENDING")  # PENDING|APPROVED|REJECTED
     reason = fields.TextField(null=True)
     reviewed_by = fields.CharField(max_length=100, null=True)

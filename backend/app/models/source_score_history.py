@@ -3,11 +3,18 @@
 from tortoise import fields
 from tortoise.models import Model
 
+from app.models.execution import Execution
+from app.models.source import Source
+
 
 class SourceScoreHistory(Model):
     id = fields.UUIDField(pk=True)
-    source = fields.ForeignKeyField("models.Source", related_name="score_history")
-    execution = fields.ForeignKeyField("models.Execution", related_name="score_history", null=True)
+    source: fields.ForeignKeyRelation[Source] = fields.ForeignKeyField(
+        "models.Source", related_name="score_history"
+    )
+    execution: fields.ForeignKeyNullableRelation[Execution] = fields.ForeignKeyField(
+        "models.Execution", related_name="score_history", null=True
+    )
     previous_score = fields.DecimalField(max_digits=4, decimal_places=3)
     new_score = fields.DecimalField(max_digits=4, decimal_places=3)
     processed_count = fields.IntField(default=0)

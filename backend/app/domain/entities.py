@@ -15,8 +15,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
-InputT = TypeVar("InputT")
-OutputT = TypeVar("OutputT")
+InputT = TypeVar("InputT", contravariant=True)
+OutputT = TypeVar("OutputT", covariant=True)
 
 
 class Agent(Protocol, Generic[InputT, OutputT]):

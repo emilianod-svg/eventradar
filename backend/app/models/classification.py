@@ -3,10 +3,14 @@
 from tortoise import fields
 from tortoise.models import Model
 
+from app.models.raw_content import RawContent
+
 
 class Classification(Model):
     id = fields.UUIDField(pk=True)
-    raw_content = fields.ForeignKeyField("models.RawContent", related_name="classifications")
+    raw_content: fields.ForeignKeyRelation[RawContent] = fields.ForeignKeyField(
+        "models.RawContent", related_name="classifications"
+    )
     is_event = fields.BooleanField()
     confidence = fields.DecimalField(max_digits=4, decimal_places=3)
     extracted_fields = fields.JSONField(default=dict)

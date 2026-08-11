@@ -3,11 +3,18 @@
 from tortoise import fields
 from tortoise.models import Model
 
+from app.models.execution import Execution
+from app.models.source import Source
+
 
 class ExecutionSource(Model):
     id = fields.UUIDField(pk=True)
-    execution = fields.ForeignKeyField("models.Execution", related_name="execution_sources")
-    source = fields.ForeignKeyField("models.Source", related_name="execution_sources")
+    execution: fields.ForeignKeyRelation[Execution] = fields.ForeignKeyField(
+        "models.Execution", related_name="execution_sources"
+    )
+    source: fields.ForeignKeyRelation[Source] = fields.ForeignKeyField(
+        "models.Source", related_name="execution_sources"
+    )
     status = fields.CharField(max_length=20, default="PENDING")
     items_collected = fields.IntField(default=0)
     items_accepted = fields.IntField(default=0)
