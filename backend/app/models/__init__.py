@@ -5,10 +5,10 @@ Este módulo se referencia como `app.models` en `TORTOISE_ORM["apps"]["models"]`
 """
 
 from app.models.classification import Classification
+from app.models.evaluation_decision import EvaluationDecision
 from app.models.event import Event
 from app.models.event_change_history import EventChangeHistory
 from app.models.event_source import EventSource
-from app.models.evaluation_decision import EvaluationDecision
 from app.models.execution import Execution
 from app.models.execution_source import ExecutionSource
 from app.models.raw_content import RawContent

@@ -19,7 +19,11 @@ class ExecutionLock(Protocol):
 
 class NotImplementedExecutionLock:
     async def acquire(self) -> bool:
-        raise NotImplementedError("ExecutionLock.acquire: pendiente de implementación (sección 13).")
+        raise NotImplementedError(
+            "ExecutionLock.acquire: pendiente de implementación (sección 13)."
+        )
 
     async def release(self) -> None:
-        raise NotImplementedError("ExecutionLock.release: pendiente de implementación (sección 13).")
+        raise NotImplementedError(
+            "ExecutionLock.release: pendiente de implementación (sección 13)."
+        )

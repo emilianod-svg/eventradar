@@ -94,7 +94,9 @@ class Settings(BaseSettings):
     # --- Google Vision (OCR) ---
     google_vision_credentials_json: str | None = Field(
         default=None,
-        description="Ruta a un archivo de credenciales de servicio, NO el contenido en texto plano.",
+        description=(
+            "Ruta a un archivo de credenciales de servicio, NO el contenido en texto plano."
+        ),
     )
     ocr_enabled: bool = Field(default=False)
 
@@ -117,7 +119,7 @@ class Settings(BaseSettings):
         return value.strip()
 
     @model_validator(mode="after")
-    def validate_production_requirements(self) -> "Settings":
+    def validate_production_requirements(self) -> Settings:
         if self.environment == Environment.PRODUCTION:
             missing: list[str] = []
             if self.admin_api_key in (None, ""):

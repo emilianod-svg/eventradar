@@ -9,9 +9,8 @@ marca como integración y se omite si no hay `TEST_DATABASE_URL` configurada
 from __future__ import annotations
 
 import pytest
-from httpx import ASGITransport, AsyncClient
-
 from app.main import create_app
+from httpx import ASGITransport, AsyncClient
 
 
 @pytest.mark.asyncio
@@ -31,8 +30,10 @@ async def test_health_does_not_require_database() -> None:
 async def test_ready_reports_database_up() -> None:
     app = create_app()
     transport = ASGITransport(app=app)
-    async with AsyncClient(transport=transport, base_url="http://test") as client:
-        async with app.router.lifespan_context(app):
-            response = await client.get("/ready")
+    async with (
+        AsyncClient(transport=transport, base_url="http://test") as client,
+        app.router.lifespan_context(app),
+    ):
+        response = await client.get("/ready")
     assert response.status_code == 200
     assert response.json()["database"] == "up"
