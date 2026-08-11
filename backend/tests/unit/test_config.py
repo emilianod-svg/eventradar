@@ -18,7 +18,8 @@ def test_resolved_database_url_uses_explicit_override() -> None:
     assert settings.resolved_database_url == "postgres://x:y@z:5432/db"
 
 
-def test_resolved_database_url_builds_from_parts() -> None:
+def test_resolved_database_url_builds_from_parts(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("DATABASE_URL", raising=False)
     settings = Settings(
         _env_file=None,
         postgres_user="u",
