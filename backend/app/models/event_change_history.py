@@ -10,12 +10,8 @@ class EventChangeHistory(Model):
     field_name = fields.CharField(max_length=100)
     old_value = fields.TextField(null=True)
     new_value = fields.TextField(null=True)
-    source = fields.ForeignKeyField(
-        "models.Source", related_name="event_changes", null=True
-    )
-    execution = fields.ForeignKeyField(
-        "models.Execution", related_name="event_changes", null=True
-    )
+    source = fields.ForeignKeyField("models.Source", related_name="event_changes", null=True)
+    execution = fields.ForeignKeyField("models.Execution", related_name="event_changes", null=True)
     created_at = fields.DatetimeField(auto_now_add=True)
 
     class Meta:

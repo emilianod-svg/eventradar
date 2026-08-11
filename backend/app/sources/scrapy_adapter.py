@@ -12,6 +12,4 @@ from app.domain.entities import RawContentCandidate, SourceDefinition
 
 class ScrapyAdapter:
     async def fetch(self, source: SourceDefinition) -> list[RawContentCandidate]:
-        raise NotImplementedError(
-            "ScrapyAdapter.fetch: pendiente de implementación (sección 8.4)."
-        )
+        raise NotImplementedError("ScrapyAdapter.fetch: pendiente de implementación (sección 8.4).")

@@ -125,9 +125,7 @@ class Settings(BaseSettings):
             if self.admin_api_key in (None, ""):
                 missing.append("ADMIN_API_KEY")
             if self.cors_allowed_origins.strip() == "*":
-                raise ValueError(
-                    "CORS_ALLOWED_ORIGINS no puede ser '*' en producción."
-                )
+                raise ValueError("CORS_ALLOWED_ORIGINS no puede ser '*' en producción.")
             if not self.database_url and self.postgres_password == "eventradar":
                 missing.append("POSTGRES_PASSWORD (valor por defecto inseguro)")
             if missing:
