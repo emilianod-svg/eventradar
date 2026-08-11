@@ -86,8 +86,7 @@ source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 cp ../.env.example ../.env  # completar valores
 # con PostgreSQL corriendo localmente y DATABASE_URL/.env apuntando a él:
-aerich init -t app.config.TORTOISE_ORM   # una sola vez
-aerich init-db                            # una sola vez
+aerich init-db                            # una sola vez (crea tabla aerich y primera migración)
 uvicorn app.main:app --reload
 ```
 
@@ -245,6 +244,7 @@ despliegue manual/aprobado, no automático sin revisión.
 | `/ready` responde `degraded` | PostgreSQL no accesible | Verificar `DATABASE_URL`/`POSTGRES_*` y que el contenedor/servicio esté arriba |
 | `ConfigurationError: ADMIN_API_KEY` | Falta la variable | Definir `ADMIN_API_KEY` en `.env` |
 | `ExternalServiceNotConfiguredError` en agentes | LLM/OCR/Nominatim/Facebook sin configurar | Esperado en esta inicialización; completar credenciales cuando el equipo las tenga |
+| `aerich` error: "ConnectionRefusedError" | PostgreSQL no accesible o `DATABASE_URL` incorrecto | Verificar que PostgreSQL esté arriba y que `.aerichrc` y `.env` tengan la URL correcta |
 | Frontend no encuentra `VITE_API_URL` | `.env` no copiado o `envDir` incorrecto | Confirmar que `.env` existe en la raíz del repo, no en `frontend/` |
 | `npm ci` falla en CI | Falta `package-lock.json` versionado | Correr `npm install` localmente una vez y commitear el lockfile (pendiente P0) |
 
