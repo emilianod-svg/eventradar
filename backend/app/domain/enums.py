@@ -1,9 +1,9 @@
 """Enumeraciones de dominio (sección 11.3 y 8.7 del plan)."""
 
-from enum import Enum
+from enum import StrEnum
 
 
-class ProcessingStatus(str, Enum):
+class ProcessingStatus(StrEnum):
     """Estados por los que pasa un contenido/evento durante el ciclo."""
 
     COLLECTED = "COLLECTED"
@@ -17,7 +17,7 @@ class ProcessingStatus(str, Enum):
     FAILED = "FAILED"
 
 
-class EventStatus(str, Enum):
+class EventStatus(StrEnum):
     """Estado público de un evento persistido."""
 
     ACTIVE = "ACTIVE"
@@ -26,7 +26,7 @@ class EventStatus(str, Enum):
     ARCHIVED = "ARCHIVED"
 
 
-class EvaluationDecisionType(str, Enum):
+class EvaluationDecisionType(StrEnum):
     """Decisión explicable que produce el Agente Evaluador (sección 8.7)."""
 
     ACCEPT = "ACCEPT"
@@ -35,7 +35,7 @@ class EvaluationDecisionType(str, Enum):
     MERGE = "MERGE"
 
 
-class ExecutionStatus(str, Enum):
+class ExecutionStatus(StrEnum):
     """Estado de una ejecución del ciclo completo (sección 6.3)."""
 
     RUNNING = "RUNNING"
@@ -44,7 +44,7 @@ class ExecutionStatus(str, Enum):
     FAILED = "FAILED"
 
 
-class SourceAdapterType(str, Enum):
+class SourceAdapterType(StrEnum):
     """Tipo de adaptador de recolección (sección 8.4)."""
 
     SCRAPY_STATIC = "SCRAPY_STATIC"

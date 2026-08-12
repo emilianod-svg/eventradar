@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import httpx
 import pytest
-
 from app.services.llm.ollama import OllamaLLMClient
 
 
@@ -23,8 +22,6 @@ async def test_extract_event_parses_json_response(monkeypatch: pytest.MonkeyPatc
     from app.config import get_settings
 
     get_settings.cache_clear()
-
-    client = OllamaLLMClient()
 
     client = OllamaLLMClient(transport=transport)
     result = await client.extract_event(text="texto", extraction_date_iso="2026-08-12T00:00:00Z")

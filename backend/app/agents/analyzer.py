@@ -8,7 +8,7 @@ rechazar).
 
 from __future__ import annotations
 
-from datetime import timezone
+from datetime import UTC
 
 from app.domain.decisions import CONFIDENCE_REVIEW_THRESHOLD
 from app.domain.entities import EventCandidate, RawContentCandidate
@@ -58,7 +58,7 @@ class AnalyzerAgent:
                 normalized[field] = value.replace("Z", "+00:00")
 
         if data.published_at is not None:
-            normalized.setdefault("published_at", data.published_at.astimezone(timezone.utc).isoformat())
+            normalized.setdefault("published_at", data.published_at.astimezone(UTC).isoformat())
 
         return normalized
 

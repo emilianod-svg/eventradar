@@ -2,11 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from uuid import uuid4
 
 import pytest
-
 from app.agents.analyzer import AnalyzerAgent
 from app.domain.entities import RawContentCandidate, SourceDefinition
 
@@ -31,7 +30,7 @@ async def test_analyzer_agent_returns_event_candidate_when_confident() -> None:
         source_id=source.id,
         url="https://ticketmisiones.com/eventos/feria-artesanal-2026",
         raw_text="Feria Artesanal de Invierno\n15 ago 2026\nArtesanos locales",
-        fetched_at=datetime(2026, 8, 12, tzinfo=timezone.utc),
+        fetched_at=datetime(2026, 8, 12, tzinfo=UTC),
         content_hash="hash",
     )
     llm = FakeLLMClient(
@@ -56,7 +55,7 @@ async def test_analyzer_agent_discards_low_confidence_or_non_event() -> None:
         source_id=uuid4(),
         url="https://example.com",
         raw_text="texto",
-        fetched_at=datetime(2026, 8, 12, tzinfo=timezone.utc),
+        fetched_at=datetime(2026, 8, 12, tzinfo=UTC),
         content_hash="hash",
     )
     llm = FakeLLMClient({"is_event": True, "confidence": 0.4})

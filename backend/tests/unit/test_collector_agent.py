@@ -5,7 +5,6 @@ from __future__ import annotations
 from uuid import uuid4
 
 import pytest
-
 from app.agents.collector import CollectorAgent
 from app.domain.entities import SourceDefinition
 
@@ -14,7 +13,7 @@ class FakeScrapyAdapter:
     def __init__(self) -> None:
         self.called = False
 
-    async def fetch(self, source: SourceDefinition):
+    async def fetch(self, source: SourceDefinition) -> list[object]:
         self.called = True
         return []
 

@@ -7,8 +7,8 @@ son stubs en esta inicialización.
 
 from __future__ import annotations
 
-from app.sources.scrapy_adapter import ScrapyAdapter
 from app.domain.entities import RawContentCandidate, SourceDefinition
+from app.sources.scrapy_adapter import ScrapyAdapter
 
 
 class CollectorAgent:

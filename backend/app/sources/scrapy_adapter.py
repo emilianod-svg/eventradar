@@ -7,9 +7,10 @@ romper el contrato de salida (`RawContentCandidate`).
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
-from html.parser import HTMLParser
+from datetime import UTC, datetime
 from hashlib import sha256
+from html.parser import HTMLParser
+from typing import Literal, TypedDict, cast
 from urllib.parse import urljoin
 from urllib.request import urlopen
 
@@ -30,12 +31,21 @@ class ScrapyAdapter:
         fetched_at: datetime | None = None,
     ) -> list[RawContentCandidate]:
         extracted = _EventCardParser(page_url=page_url).parse(html)
-        fetched_at = fetched_at or datetime.now(timezone.utc)
+        fetched_at = fetched_at or datetime.now(UTC)
 
         candidates: list[RawContentCandidate] = []
         for item in extracted:
-            raw_text = "\n".join(part for part in [item["title"], item["published_at_text"], item["description"]] if part)
-            content_hash = sha256(f"{source.id}:{item['url']}:{raw_text}".encode("utf-8")).hexdigest()
+            raw_text_parts: list[str] = [
+                item["title"],
+                item["published_at_text"],
+                item["description"],
+            ]
+            raw_text = "\n".join(
+                part for part in raw_text_parts if part
+            )
+            content_hash = sha256(
+                f"{source.id}:{item['url']}:{raw_text}".encode()
+            ).hexdigest()
             candidates.append(
                 RawContentCandidate(
                     source_id=source.id,
@@ -66,12 +76,12 @@ class _EventCardParser(HTMLParser):
     def __init__(self, *, page_url: str) -> None:
         super().__init__()
         self.page_url = page_url
-        self._cards: list[dict[str, object]] = []
-        self._current: dict[str, object] | None = None
+        self._cards: list[_ParsedCard] = []
+        self._current: _ParsedCard | None = None
         self._current_text_field: str | None = None
         self._buffer: list[str] = []
 
-    def parse(self, html: str) -> list[dict[str, object]]:
+    def parse(self, html: str) -> list[_ParsedCard]:
         self.feed(html)
         self.close()
         return [card for card in self._cards if card.get("url") and card.get("title")]
@@ -80,7 +90,11 @@ class _EventCardParser(HTMLParser):
         attr_map = {key: value or "" for key, value in attrs}
         class_names = attr_map.get("class", "")
 
-        if self._current is None and tag in {"article", "div", "li"} and _looks_like_card(class_names):
+        if (
+            self._current is None
+            and tag in {"article", "div", "li"}
+            and _looks_like_card(class_names)
+        ):
             self._current = {
                 "title": "",
                 "description": "",
@@ -115,7 +129,13 @@ class _EventCardParser(HTMLParser):
         if tag in {"h1", "h2", "h3", "h4", "h5", "h6", "p", "time"} and self._current_text_field:
             text = " ".join(part.strip() for part in self._buffer if part.strip())
             existing = str(self._current.get(self._current_text_field, "")).strip()
-            self._current[self._current_text_field] = " ".join(part for part in [existing, text] if part).strip()
+            field_name = cast(
+                "Literal['title', 'description', 'url', 'published_at', 'published_at_text']",
+                self._current_text_field,
+            )
+            self._current[field_name] = " ".join(
+                part for part in [existing, text] if part
+            ).strip()
             self._current_text_field = None
             self._buffer = []
             return
@@ -143,5 +163,13 @@ def _parse_datetime(value: str) -> datetime | None:
     except ValueError:
         return None
     if parsed.tzinfo is None:
-        return parsed.replace(tzinfo=timezone.utc)
+        return parsed.replace(tzinfo=UTC)
     return parsed
+
+
+class _ParsedCard(TypedDict):
+    title: str
+    description: str
+    url: str
+    published_at: datetime | None
+    published_at_text: str

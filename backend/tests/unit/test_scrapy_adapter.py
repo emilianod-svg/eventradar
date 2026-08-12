@@ -10,7 +10,12 @@ from app.sources.scrapy_adapter import ScrapyAdapter
 
 
 def test_parse_html_fixture_to_raw_content_candidates() -> None:
-    fixture_path = Path(__file__).resolve().parents[1] / "fixtures" / "scrapy" / "ticketmisiones.html"
+    fixture_path = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "scrapy"
+        / "ticketmisiones.html"
+    )
     html = fixture_path.read_text(encoding="utf-8")
 
     source = SourceDefinition(

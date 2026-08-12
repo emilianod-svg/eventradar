@@ -6,7 +6,6 @@ from pathlib import Path
 from uuid import uuid4
 
 import pytest
-
 from app.agents.analyzer import AnalyzerAgent
 from app.agents.collector import CollectorAgent
 from app.domain.entities import SourceDefinition
@@ -27,7 +26,12 @@ class FakeLLMClient:
 
 @pytest.mark.asyncio
 async def test_scrapy_collector_and_analyzer_chain(monkeypatch: pytest.MonkeyPatch) -> None:
-    fixture_path = Path(__file__).resolve().parents[1] / "fixtures" / "scrapy" / "ticketmisiones.html"
+    fixture_path = (
+        Path(__file__).resolve().parents[1]
+        / "fixtures"
+        / "scrapy"
+        / "ticketmisiones.html"
+    )
     html = fixture_path.read_text(encoding="utf-8")
 
     source = SourceDefinition(

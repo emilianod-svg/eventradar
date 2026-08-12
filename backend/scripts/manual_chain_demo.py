@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import asyncio
 import json
-from datetime import datetime, timezone
 from pathlib import Path
 from uuid import uuid4
 
@@ -37,7 +36,8 @@ class DemoLLMClient:
 
 
 async def main() -> None:
-    fixture_path = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "scrapy" / "ticketmisiones.html"
+    fixture_path = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "scrapy"
+    fixture_path = fixture_path / "ticketmisiones.html"
     html = fixture_path.read_text(encoding="utf-8")
 
     source = SourceDefinition(
@@ -54,13 +54,15 @@ async def main() -> None:
     raw_candidates = await collector.execute(source)
 
     print("RAW CANDIDATES:")
-    print(json.dumps([candidate.model_dump(mode="json") for candidate in raw_candidates], indent=2, ensure_ascii=False))
+    raw_payload = [candidate.model_dump(mode="json") for candidate in raw_candidates]
+    print(json.dumps(raw_payload, indent=2, ensure_ascii=False))
 
     analyzer = AnalyzerAgent(llm_client=DemoLLMClient())
     analyzed = await analyzer.execute(raw_candidates[0])
 
     print("\nANALYZED EVENTS:")
-    print(json.dumps([event.model_dump(mode="json") for event in analyzed], indent=2, ensure_ascii=False))
+    analyzed_payload = [event.model_dump(mode="json") for event in analyzed]
+    print(json.dumps(analyzed_payload, indent=2, ensure_ascii=False))
 
 
 if __name__ == "__main__":
