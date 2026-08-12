@@ -81,7 +81,7 @@ docker compose up --build
 
 ```bash
 cd backend
-python -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate   # Windows: .venv\Scripts\activate
 pip install -e ".[dev]"
 cp ../.env.example ../.env  # completar valores

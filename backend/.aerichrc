@@ -1,5 +1,5 @@
 {
-  "db_url": "postgres://eventradar:change-me-local-only@localhost:5432/eventradar",
+  "db_url": "postgres://eventradar:change-me-local-only@localhost:5433/eventradar",
   "tortoise_orm": "app.config.TORTOISE_ORM",
   "location": "./migrations",
   "src_folder": "."
