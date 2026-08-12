@@ -46,6 +46,7 @@ src_folder = "./."
 line-length = 100
 target-version = "py311"
 src = ["app", "tests"]
+extend-exclude = ["migrations"]
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
