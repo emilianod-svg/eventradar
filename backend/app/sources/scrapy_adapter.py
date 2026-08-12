@@ -40,12 +40,8 @@ class ScrapyAdapter:
                 item["published_at_text"],
                 item["description"],
             ]
-            raw_text = "\n".join(
-                part for part in raw_text_parts if part
-            )
-            content_hash = sha256(
-                f"{source.id}:{item['url']}:{raw_text}".encode()
-            ).hexdigest()
+            raw_text = "\n".join(part for part in raw_text_parts if part)
+            content_hash = sha256(f"{source.id}:{item['url']}:{raw_text}".encode()).hexdigest()
             candidates.append(
                 RawContentCandidate(
                     source_id=source.id,
@@ -133,9 +129,7 @@ class _EventCardParser(HTMLParser):
                 "Literal['title', 'description', 'url', 'published_at', 'published_at_text']",
                 self._current_text_field,
             )
-            self._current[field_name] = " ".join(
-                part for part in [existing, text] if part
-            ).strip()
+            self._current[field_name] = " ".join(part for part in [existing, text] if part).strip()
             self._current_text_field = None
             self._buffer = []
             return

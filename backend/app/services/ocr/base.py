@@ -25,5 +25,5 @@ def get_ocr_client() -> OCRClient:
     if not settings.ocr_enabled or not settings.google_vision_credentials_json:
         return NotConfiguredOCRClient()
     raise NotImplementedError(
-        "Cliente de Google Vision declarado como habilitado pero sin " "implementación todavía."
+        "Cliente de Google Vision declarado como habilitado pero sin implementación todavía."
     )
