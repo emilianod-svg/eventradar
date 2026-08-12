@@ -35,8 +35,10 @@ def get_llm_client() -> LLMClient:
     settings = get_settings()
     if not settings.llm_provider or not settings.llm_model:
         return NotConfiguredLLMClient()
-    # TODO: instanciar el cliente real una vez definido el proveedor
-    # (sección 3.1). Debe implementarse detrás de esta misma interfaz.
+    if settings.llm_provider.lower() == "ollama":
+        from app.services.llm.ollama import OllamaLLMClient
+
+        return OllamaLLMClient()
     raise NotImplementedError(
         f"Proveedor LLM '{settings.llm_provider}' declarado pero sin "
         "implementación de cliente todavía."
