@@ -15,6 +15,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field
 
+from app.domain.enums import ProcessingStatus
+
 InputT = TypeVar("InputT", contravariant=True)
 OutputT = TypeVar("OutputT", covariant=True)
 
@@ -81,6 +83,7 @@ class EventCandidate(BaseModel):
     category: str | None = None
     special_requirements: str | None = None
     evidence: dict[str, str] = Field(default_factory=dict)
+    processing_status: ProcessingStatus = ProcessingStatus.ANALYZED
 
 
 class EvaluationResult(BaseModel):
