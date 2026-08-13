@@ -10,8 +10,9 @@ from __future__ import annotations
 
 from datetime import UTC
 
-from app.domain.decisions import CONFIDENCE_REVIEW_THRESHOLD
+from app.domain.decisions import CONFIDENCE_ACCEPT_THRESHOLD, CONFIDENCE_REVIEW_THRESHOLD
 from app.domain.entities import EventCandidate, RawContentCandidate
+from app.domain.enums import ProcessingStatus
 from app.services.llm.base import LLMClient, get_llm_client
 
 
@@ -30,6 +31,10 @@ class AnalyzerAgent:
             return []
         if candidate.confidence < CONFIDENCE_REVIEW_THRESHOLD:
             return []
+        if candidate.confidence < CONFIDENCE_ACCEPT_THRESHOLD:
+            candidate = candidate.model_copy(
+                update={"processing_status": ProcessingStatus.PENDING_REVIEW}
+            )
         return [candidate]
 
     def _normalize_candidate(

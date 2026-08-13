@@ -3,12 +3,17 @@
 from __future__ import annotations
 
 import json
+import logging
+import time
 from typing import Any
 
 import httpx
 
 from app.config import get_settings
 from app.domain.errors import ExternalServiceNotConfiguredError
+from app.services.llm.prompts import ANALYZER_PROMPT_VERSION, build_analyzer_prompt
+
+logger = logging.getLogger(__name__)
 
 
 class OllamaLLMClient:
@@ -22,10 +27,11 @@ class OllamaLLMClient:
         self._model = settings.llm_model or ""
         self._timeout = settings.llm_timeout_seconds
         self._max_tokens = settings.llm_max_tokens
+        self._max_retries = settings.llm_max_retries
         self._transport = transport
 
     async def extract_event(self, *, text: str, extraction_date_iso: str) -> dict[str, Any]:
-        prompt = self._build_prompt(text=text, extraction_date_iso=extraction_date_iso)
+        prompt = build_analyzer_prompt(text=text, extraction_date_iso=extraction_date_iso)
         payload = {
             "model": self._model,
             "prompt": prompt,
@@ -33,6 +39,48 @@ class OllamaLLMClient:
             "options": {"num_predict": self._max_tokens},
         }
 
+        attempts = max(1, self._max_retries + 1)
+        last_error: Exception | None = None
+        for attempt in range(1, attempts + 1):
+            started_at = time.monotonic()
+            data = await self._call_ollama(payload)
+            latency_ms = (time.monotonic() - started_at) * 1000
+            raw_output = data.get("response", "")
+
+            try:
+                if not isinstance(raw_output, str) or not raw_output.strip():
+                    raise ValueError("Ollama no devolvió una respuesta textual válida.")
+                parsed = self._parse_json_object(raw_output)
+            except ValueError as exc:
+                last_error = exc
+                logger.warning(
+                    "llm_extract_invalid_json",
+                    extra={
+                        "model": self._model,
+                        "prompt_version": ANALYZER_PROMPT_VERSION,
+                        "attempt": attempt,
+                        "latency_ms": round(latency_ms, 1),
+                    },
+                )
+                continue
+
+            logger.info(
+                "llm_extract_ok",
+                extra={
+                    "model": self._model,
+                    "prompt_version": ANALYZER_PROMPT_VERSION,
+                    "attempt": attempt,
+                    "latency_ms": round(latency_ms, 1),
+                    "eval_count": data.get("eval_count"),
+                    "prompt_eval_count": data.get("prompt_eval_count"),
+                },
+            )
+            return parsed
+
+        assert last_error is not None
+        raise last_error
+
+    async def _call_ollama(self, payload: dict[str, Any]) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(
                 base_url=self._base_url,
@@ -45,24 +93,7 @@ class OllamaLLMClient:
             raise ExternalServiceNotConfiguredError(
                 f"No se pudo contactar Ollama en {self._base_url}."
             ) from exc
-
-        data = response.json()
-        raw_output = data.get("response", "")
-        if not isinstance(raw_output, str) or not raw_output.strip():
-            raise ValueError("Ollama no devolvió una respuesta textual válida.")
-
-        return self._parse_json_object(raw_output)
-
-    def _build_prompt(self, *, text: str, extraction_date_iso: str) -> str:
-        return (
-            "Extrae un evento en JSON estricto. "
-            "Devuelve solo un objeto JSON válido sin markdown ni texto extra. "
-            "Campos esperados: is_event, confidence, title, start_at, end_at, "
-            "recurrence_text, venue_name, address, price_text, description, "
-            "category, special_requirements, evidence. "
-            f"Fecha de extracción: {extraction_date_iso}.\n\n"
-            f"Texto:\n{text}"
-        )
+        return response.json()
 
     def _parse_json_object(self, raw_output: str) -> dict[str, Any]:
         cleaned = raw_output.strip()
