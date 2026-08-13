@@ -9,19 +9,19 @@
   },
   {
     "name": "Misiones Online",
-    "adapter_type": "SCRAPY_STATIC",
-    "base_url": null,
-    "active": false,
+    "adapter_type": "RSS_FEED",
+    "base_url": "https://misionesonline.net/feed/",
+    "active": true,
     "reliability_score": 0.5,
-    "notes": "URL exacta pendiente de confirmación por el equipo (no inventada)."
+    "notes": "El HTML del sitio está detrás de un challenge de Cloudflare (HTTP 403 con user-agent no navegador); el feed RSS general lo esquiva y sí responde. Es el feed completo del portal (no solo cultura/agenda), así que el AnalyzerAgent recibirá bastante contenido que no es evento (is_event=false) — esperable, no es un bug del adaptador."
   },
   {
     "name": "Misiones Cuatro",
-    "adapter_type": "SCRAPY_STATIC",
-    "base_url": null,
-    "active": false,
+    "adapter_type": "RSS_FEED",
+    "base_url": "https://misionescuatro.com/espectaculos/feed/",
+    "active": true,
     "reliability_score": 0.5,
-    "notes": "URL exacta pendiente de confirmación por el equipo (no inventada)."
+    "notes": "Feed acotado a la categoría Cultura y Espectáculos, con cuerpo completo vía content:encoded. El robots.txt del sitio bloquea explícitamente crawlers de IA (ClaudeBot, GPTBot, etc.) y marca Content-Signal ai-train=no; se decidió proceder igual (decisión de negocio, no técnica) ya que el uso es extracción puntual de eventos, no entrenamiento de modelos."
   },
   {
     "name": "Agenda Cultural Misiones",

@@ -75,6 +75,18 @@ def error_envelope(
     }
 
 
+class SourceFetchError(AppError):
+    """Un adaptador de fuente no pudo descargar/parsear contenido (sección 13).
+
+    Debe usarse para aislar el fallo a una sola fuente: quien orqueste el
+    ciclo captura esta excepción por fuente y continúa con las demás
+    ("un fallo no cancela las otras fuentes").
+    """
+
+    code = "source_fetch_failed"
+    status_code = 502
+
+
 class NotImplementedYetError(AppError):
     """La funcionalidad existe como contrato pero su lógica aún no se implementó.
 
