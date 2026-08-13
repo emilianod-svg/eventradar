@@ -120,6 +120,81 @@ async def test_analyzer_agent_accepts_recurrent_event_with_recurrence_text() -> 
 
 
 @pytest.mark.asyncio
+async def test_analyzer_agent_extracts_multiple_events_from_single_publication() -> None:
+    # Sección 9.2: una publicación (ej. cartelera semanal) puede describir
+    # varios eventos distintos; el schema v2 los envuelve en "events".
+    llm = FakeLLMClient(
+        {
+            "events": [
+                {"is_event": True, "confidence": 0.9, "title": "Evento A"},
+                {"is_event": True, "confidence": 0.85, "title": "Evento B"},
+            ]
+        }
+    )
+
+    agent = AnalyzerAgent(llm_client=llm)
+    result = await agent.execute(_raw_candidate("Cartelera: Evento A y Evento B"))
+
+    assert [r.title for r in result] == ["Evento A", "Evento B"]
+
+
+@pytest.mark.asyncio
+async def test_analyzer_agent_returns_empty_list_when_no_events_in_publication() -> None:
+    llm = FakeLLMClient({"events": []})
+
+    agent = AnalyzerAgent(llm_client=llm)
+    result = await agent.execute(_raw_candidate("Publicidad de un local, no hay evento."))
+
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_analyzer_agent_filters_each_event_independently_within_batch() -> None:
+    llm = FakeLLMClient(
+        {
+            "events": [
+                {"is_event": True, "confidence": 0.9, "title": "Evento válido"},
+                {"is_event": True, "confidence": 0.2, "title": "Evento de baja confianza"},
+                {"is_event": False, "confidence": 0.95, "title": "No es un evento"},
+            ]
+        }
+    )
+
+    agent = AnalyzerAgent(llm_client=llm)
+    result = await agent.execute(_raw_candidate())
+
+    assert len(result) == 1
+    assert result[0].title == "Evento válido"
+
+
+@pytest.mark.asyncio
+async def test_analyzer_agent_rejects_event_with_start_at_before_fetched_at() -> None:
+    # Sección 9.2 y 18.3: "rechazar noticias sobre eventos pasados". No hay
+    # que confiar únicamente en que el LLM obedezca la instrucción del
+    # prompt; se valida en código como red de seguridad.
+    raw = RawContentCandidate(
+        source_id=uuid4(),
+        url="https://example.com",
+        raw_text="El festival del año pasado fue un éxito.",
+        fetched_at=datetime(2026, 8, 12, tzinfo=UTC),
+        content_hash="hash",
+    )
+    llm = FakeLLMClient(
+        {
+            "is_event": True,
+            "confidence": 0.9,
+            "title": "Festival (ya ocurrido)",
+            "start_at": "2026-01-01T20:00:00Z",
+        }
+    )
+
+    agent = AnalyzerAgent(llm_client=llm)
+    result = await agent.execute(raw)
+
+    assert result == []
+
+
+@pytest.mark.asyncio
 async def test_analyzer_agent_resolves_relative_date_returned_by_llm() -> None:
     # El LLM es quien resuelve la fecha relativa a partir de extraction_date_iso
     # (sección 8.5); el Analizador solo valida que el resultado sea una fecha válida.

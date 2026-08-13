@@ -1,9 +1,12 @@
 """Agente Analizador (sección 8.5 y 9).
 
-Combina texto web + OCR, llama al LLM (familia Llama, proveedor pendiente de
-decisión — ver `app/services/llm`), valida el JSON contra el schema y aplica
-las reglas de confianza (>=0.70 continuar, 0.50-0.69 revisión, <0.50
-rechazar).
+Combina texto web + OCR, llama al LLM configurado (`app/services/llm`),
+valida el JSON contra el schema y aplica las reglas de confianza (>=0.70
+continuar, 0.50-0.69 revisión, <0.50 rechazar).
+
+Sección 9.2 exige permitir múltiples eventos por publicación: el LLM
+devuelve `{"events": [...]}` (prompt v2) y cada elemento se procesa y
+filtra de forma independiente.
 """
 
 from __future__ import annotations
@@ -25,17 +28,37 @@ class AnalyzerAgent:
             text=data.raw_text,
             extraction_date_iso=data.fetched_at.isoformat(),
         )
-        candidate = EventCandidate.model_validate(self._normalize_candidate(extracted, data))
 
-        if not candidate.is_event:
-            return []
-        if candidate.confidence < CONFIDENCE_REVIEW_THRESHOLD:
-            return []
-        if candidate.confidence < CONFIDENCE_ACCEPT_THRESHOLD:
-            candidate = candidate.model_copy(
-                update={"processing_status": ProcessingStatus.PENDING_REVIEW}
-            )
-        return [candidate]
+        results: list[EventCandidate] = []
+        for event_dict in self._extract_events_list(extracted):
+            candidate = EventCandidate.model_validate(self._normalize_candidate(event_dict, data))
+
+            if not candidate.is_event:
+                continue
+            if candidate.confidence < CONFIDENCE_REVIEW_THRESHOLD:
+                continue
+            # Sección 9.2: "rechazar noticias sobre eventos pasados". El prompt
+            # ya se lo pide al LLM, pero no es determinístico — se valida acá
+            # como red de seguridad (caso obligatorio de la sección 18.3).
+            if candidate.start_at is not None and candidate.start_at < data.fetched_at:
+                continue
+            if candidate.confidence < CONFIDENCE_ACCEPT_THRESHOLD:
+                candidate = candidate.model_copy(
+                    update={"processing_status": ProcessingStatus.PENDING_REVIEW}
+                )
+            results.append(candidate)
+        return results
+
+    def _extract_events_list(self, extracted: dict) -> list[dict]:
+        events = extracted.get("events")
+        if isinstance(events, list):
+            return events
+        if "is_event" in extracted:
+            # Compatibilidad: el LLM devolvió un único objeto plano (schema
+            # v1) en vez de {"events": [...]} (v2). No penalizamos al modelo
+            # por no seguir el wrapper al pie de la letra.
+            return [extracted]
+        return []
 
     def _normalize_candidate(
         self,

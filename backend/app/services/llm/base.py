@@ -27,7 +27,7 @@ class NotConfiguredLLMClient:
     async def extract_event(self, *, text: str, extraction_date_iso: str) -> dict:
         raise ExternalServiceNotConfiguredError(
             "No hay proveedor LLM configurado (LLM_PROVIDER/LLM_MODEL). "
-            "Ver sección 3.1 del plan: decisión pendiente del equipo."
+            "Ver .env.example y sección 3.1 del plan."
         )
 
 
