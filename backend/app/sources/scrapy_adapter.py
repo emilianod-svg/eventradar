@@ -12,14 +12,29 @@ from hashlib import sha256
 from html.parser import HTMLParser
 from typing import Literal, TypedDict, cast
 from urllib.parse import urljoin
-from urllib.request import urlopen
+
+import httpx
 
 from app.domain.entities import RawContentCandidate, SourceDefinition
+from app.domain.errors import SourceFetchError
+
+_DEFAULT_USER_AGENT = "EventRadar/0.1 (+https://eventradar.net.ar; bot@eventradar.net.ar)"
 
 
 class ScrapyAdapter:
+    def __init__(
+        self,
+        *,
+        transport: httpx.AsyncBaseTransport | None = None,
+        timeout: float = 20.0,
+        user_agent: str = _DEFAULT_USER_AGENT,
+    ) -> None:
+        self._transport = transport
+        self._timeout = timeout
+        self._user_agent = user_agent
+
     async def fetch(self, source: SourceDefinition) -> list[RawContentCandidate]:
-        html = self._download(source.base_url)
+        html = await self._download(source.base_url)
         return self.parse_html(source=source, html=html, page_url=source.base_url)
 
     def parse_html(
@@ -61,13 +76,24 @@ class ScrapyAdapter:
             )
         return candidates
 
-    def _download(self, url: str) -> str:
-        with urlopen(url, timeout=20) as response:  # nosec - entrada controlada por configuración
-            return response.read().decode("utf-8", errors="replace")
+    async def _download(self, url: str) -> str:
+        try:
+            async with httpx.AsyncClient(
+                timeout=self._timeout,
+                transport=self._transport,
+                headers={"User-Agent": self._user_agent},
+            ) as client:
+                response = await client.get(url)
+                response.raise_for_status()
+        except httpx.HTTPError as exc:
+            raise SourceFetchError(f"No se pudo descargar la página en {url}.") from exc
+        return response.text
 
 
 class _EventCardParser(HTMLParser):
     """Parser mínimo para fixtures y primeras fuentes estáticas."""
+
+    _CONTAINER_TAGS = {"article", "div", "li"}
 
     def __init__(self, *, page_url: str) -> None:
         super().__init__()
@@ -76,6 +102,7 @@ class _EventCardParser(HTMLParser):
         self._current: _ParsedCard | None = None
         self._current_text_field: str | None = None
         self._buffer: list[str] = []
+        self._card_depth = 0
 
     def parse(self, html: str) -> list[_ParsedCard]:
         self.feed(html)
@@ -86,11 +113,7 @@ class _EventCardParser(HTMLParser):
         attr_map = {key: value or "" for key, value in attrs}
         class_names = attr_map.get("class", "")
 
-        if (
-            self._current is None
-            and tag in {"article", "div", "li"}
-            and _looks_like_card(class_names)
-        ):
+        if self._current is None and tag in self._CONTAINER_TAGS and _looks_like_card(class_names):
             self._current = {
                 "title": "",
                 "description": "",
@@ -98,10 +121,16 @@ class _EventCardParser(HTMLParser):
                 "published_at": None,
                 "published_at_text": "",
             }
+            self._card_depth = 0
             return
 
         if self._current is None:
             return
+
+        if tag in self._CONTAINER_TAGS:
+            # Un contenedor anidado dentro de la tarjeta (wrapper de imagen,
+            # layout interno, etc.) no debe cerrarla al llegar su end tag.
+            self._card_depth += 1
 
         if tag in {"h1", "h2", "h3", "h4", "h5", "h6"}:
             self._current_text_field = "title"
@@ -109,7 +138,7 @@ class _EventCardParser(HTMLParser):
         elif tag == "p":
             self._current_text_field = "description"
             self._buffer = []
-        elif tag == "a" and attr_map.get("href"):
+        elif tag == "a" and attr_map.get("href") and not self._current["url"]:
             self._current["url"] = urljoin(self.page_url, attr_map["href"])
         elif tag == "time":
             self._current_text_field = "published_at_text"
@@ -134,7 +163,10 @@ class _EventCardParser(HTMLParser):
             self._buffer = []
             return
 
-        if tag in {"article", "div", "li"}:
+        if tag in self._CONTAINER_TAGS:
+            if self._card_depth > 0:
+                self._card_depth -= 1
+                return
             card = self._current
             if card.get("url") and card.get("title"):
                 self._cards.append(card)

@@ -48,7 +48,11 @@ async def main() -> None:
     )
 
     adapter = ScrapyAdapter()
-    adapter._download = lambda url: html  # type: ignore[method-assign]
+
+    async def fake_download(url: str) -> str:
+        return html
+
+    adapter._download = fake_download  # type: ignore[method-assign]
 
     collector = CollectorAgent(scrapy_adapter=adapter)
     raw_candidates = await collector.execute(source)

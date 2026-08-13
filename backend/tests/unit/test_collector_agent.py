@@ -18,6 +18,15 @@ class FakeScrapyAdapter:
         return []
 
 
+class FakeRssAdapter:
+    def __init__(self) -> None:
+        self.called = False
+
+    async def fetch(self, source: SourceDefinition) -> list[object]:
+        self.called = True
+        return []
+
+
 @pytest.mark.asyncio
 async def test_collector_agent_uses_scrapy_adapter_for_static_sources() -> None:
     adapter = FakeScrapyAdapter()
@@ -32,4 +41,23 @@ async def test_collector_agent_uses_scrapy_adapter_for_static_sources() -> None:
     result = await agent.execute(source)
 
     assert adapter.called is True
+    assert result == []
+
+
+@pytest.mark.asyncio
+async def test_collector_agent_uses_rss_adapter_for_rss_sources() -> None:
+    scrapy_adapter = FakeScrapyAdapter()
+    rss_adapter = FakeRssAdapter()
+    agent = CollectorAgent(scrapy_adapter=scrapy_adapter, rss_adapter=rss_adapter)
+    source = SourceDefinition(
+        id=uuid4(),
+        name="Misiones Online",
+        base_url="https://misionesonline.net/feed/",
+        adapter_type="rss_feed",
+    )
+
+    result = await agent.execute(source)
+
+    assert rss_adapter.called is True
+    assert scrapy_adapter.called is False
     assert result == []
