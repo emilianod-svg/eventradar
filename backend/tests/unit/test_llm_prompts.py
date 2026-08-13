@@ -39,4 +39,11 @@ def test_prompt_isolates_untrusted_content_with_delimiters() -> None:
 
 
 def test_prompt_version_is_stable_constant() -> None:
-    assert ANALYZER_PROMPT_VERSION == "analyzer-v1"
+    assert ANALYZER_PROMPT_VERSION == "analyzer-v2"
+
+
+def test_prompt_declares_multi_event_wrapper() -> None:
+    # Sección 9.2: "permitir múltiples eventos en una misma publicación".
+    prompt = build_analyzer_prompt(text="texto", extraction_date_iso="2026-08-12T00:00:00Z")
+
+    assert '"events"' in prompt
