@@ -106,6 +106,13 @@ class Settings(BaseSettings):
     nominatim_contact_email: str | None = Field(default=None)
     nominatim_rate_limit_seconds: float = Field(default=1.0)
 
+    # --- Google Geocoding (fallback futuro) ---
+    google_geocoding_base_url: str = Field(
+        default="https://maps.googleapis.com/maps/api/geocode/json"
+    )
+    google_geocoding_api_key: str | None = Field(default=None)
+    google_geocoding_enabled: bool = Field(default=False)
+
     # --- Presupuesto y límites de IA ---
     ai_monthly_budget_usd: float = Field(default=20.0)
 
