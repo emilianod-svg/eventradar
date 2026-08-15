@@ -4,49 +4,59 @@ description: Ejecuta las validaciones de calidad del backend y solicita autoriza
 agent: build
 ------------
 
-Tu objetivo es verificar que todas las validaciones de calidad del backend finalicen correctamente y, si encontrás errores, corregirlos únicamente después de recibir mi autorización.
+Tu objetivo es verificar y corregir todas las validaciones de calidad del backend hasta dejarlas al 100%.
 
-## Inicio de la validación
+## Ejecución inicial
 
-Podés ejecutar comandos de diagnóstico y las cuatro validaciones iniciales sin solicitar autorización.
+Podés ejecutar las validaciones iniciales sin solicitar autorización.
 
 Antes de comenzar:
 
 1. Informá que vas a ejecutar las cuatro validaciones.
-2. No modifiques archivos ni apliques correcciones automáticas durante esta primera ejecución.
-3. Verificá que estás ubicado en la raíz real del backend.
-4. Usá obligatoriamente el entorno virtual `.venv` del backend.
-5. Ejecutá todas las validaciones dentro del mismo entorno y contexto de consola.
+2. Ubicate en la raíz del backend.
+3. Verificá que exista el entorno virtual `.venv`.
+4. No modifiques archivos ni apliques correcciones automáticas durante esta primera ejecución.
 
-## Verificación obligatoria del entorno
+## Entorno virtual obligatorio
 
-Antes de ejecutar las validaciones, comprobá y mostr á:
+Todas las validaciones deben ejecutarse usando explícitamente el Python del entorno virtual del backend.
+
+Primero verificá:
 
 ```bash
 pwd
 test -d app
 test -f pyproject.toml
 test -x .venv/bin/python
-.venv/bin/python --version
 .venv/bin/python -c "import sys; print(sys.executable)"
+.venv/bin/python -m ruff --version
 .venv/bin/python -m mypy --version
 .venv/bin/python -m pytest --version
-.venv/bin/python -m ruff --version
 ```
 
-La ruta mostrada por `sys.executable` debe corresponder al archivo:
+La ruta informada por `sys.executable` debe terminar en:
 
 ```text
-<raíz-del-backend>/.venv/bin/python
+backend/.venv/bin/python
 ```
 
-Si `.venv` no existe, no contiene las herramientas necesarias o no corresponde al backend actual, detenete y explicá el problema. No instales ni actualices dependencias sin mi autorización.
+No ejecutes directamente:
 
-No uses el Python, Ruff, MyPy o Pytest instalados globalmente en el sistema.
+```bash
+ruff
+mypy
+pytest
+```
 
-## Validaciones iniciales
+Esos comandos podrían utilizar instalaciones globales de Ubuntu y producir resultados diferentes.
 
-Ejecutá desde la raíz del backend y en este orden:
+Usá siempre `.venv/bin/python -m ...`.
+
+Si `.venv` no existe o alguna herramienta no está instalada dentro del entorno virtual, detenete y explicá el problema. No instales ni actualices dependencias sin mi autorización.
+
+## Validaciones
+
+Ejecutá desde la raíz del backend, en este orden:
 
 ```bash
 .venv/bin/python -m ruff check .
@@ -55,62 +65,52 @@ Ejecutá desde la raíz del backend y en este orden:
 .venv/bin/python -m pytest
 ```
 
-No reemplaces estos comandos por validaciones parciales.
+Para cada validación registrá:
 
-No omitas archivos, módulos, directorios o pruebas para conseguir un resultado exitoso.
-
-Registrá para cada comando:
-
-* comando exacto ejecutado;
+* comando exacto;
 * directorio de ejecución;
 * salida relevante;
-* código de salida;
-* cantidad de archivos analizados, cuando la herramienta lo informe.
+* código de salida.
 
-Una validación solamente se considera correcta si el comando correspondiente finaliza con código de salida `0`.
+Una validación solamente se considera correcta si finaliza con código de salida `0`.
 
-## Autorización para corregir errores
+## Cuando una validación falla
 
-Si las cuatro validaciones finalizan correctamente, informá el resultado y terminá la tarea sin solicitar autorización.
+Detenete en la primera validación que falle.
 
-Si alguna validación falla:
+Antes de modificar archivos:
 
-1. Detenete en la primera validación que falle.
+1. Identificá el comando que falló.
+2. Informá el código de salida.
+3. Indicá el archivo y la línea del error.
+4. Mostrá el mensaje relevante.
+5. Explicá la causa probable.
+6. Indicá la corrección recomendada.
+7. Enumerá los archivos que necesitarías modificar.
+8. Pedí mi autorización explícita para aplicar las correcciones.
+9. Esperá mi respuesta.
 
-2. No modifiques ningún archivo todavía.
+La solicitud debe ser similar a:
 
-3. No ejecutes `ruff check --fix .` ni `ruff format .`.
+> Encontré errores al ejecutar `.venv/bin/python -m mypy app`. Para corregirlos necesito modificar `app/agents/evaluator.py`. ¿Me autorizás a aplicar las correcciones y repetir las validaciones hasta dejarlas al 100%?
 
-4. Informá:
+No modifiques archivos ni ejecutes comandos de corrección automática hasta recibir una respuesta afirmativa.
 
-    * el comando exacto que falló;
-    * el código de salida;
-    * el archivo y la línea;
-    * el mensaje completo del error;
-    * la causa probable;
-    * la corrección recomendada;
-    * los archivos que sería necesario modificar.
+## Después de recibir autorización
 
-5. Pedí mi autorización explícita para aplicar las correcciones.
+Una vez autorizado:
 
-6. Esperá mi respuesta antes de modificar archivos.
+1. Aplicá la corrección.
+2. Revisá los cambios realizados.
+3. Ejecutá nuevamente la validación afectada.
+4. Continuá con la siguiente validación solamente cuando la anterior pase.
+5. Repetí el proceso hasta que las cuatro validaciones finalicen correctamente.
+6. No solicites autorización por cada corrección del mismo tipo.
+7. Si aparece una decisión con consecuencias funcionales diferentes, detenete, explicá las alternativas y pedime que elija.
 
-La pregunta debe ser clara, por ejemplo:
+## Validación final completa
 
-> Encontré errores en `mypy app`. Para corregirlos necesito modificar `app/agents/evaluator.py`. ¿Me autorizás a realizar las correcciones y repetir todas las validaciones hasta dejarlas al 100%?
-
-No interpretes una respuesta ambigua como autorización.
-
-## Proceso posterior a la autorización
-
-Después de recibir mi autorización:
-
-1. Corregí el error detectado.
-2. Ejecutá nuevamente la validación afectada.
-3. Si aparecen nuevos errores de la misma naturaleza y la solución no cambia el comportamiento funcional, podés continuar corrigiéndolos sin solicitar autorización nuevamente.
-4. Cuando la validación pase, continuá con la siguiente.
-5. Repetí el proceso hasta que las cuatro validaciones pasen.
-6. Al terminar las correcciones, ejecutá nuevamente la suite completa:
+Después de realizar correcciones, ejecutá nuevamente las cuatro validaciones completas:
 
 ```bash
 .venv/bin/python -m ruff check .
@@ -119,63 +119,31 @@ Después de recibir mi autorización:
 .venv/bin/python -m pytest
 ```
 
-## Reglas para las correcciones
+Esto es obligatorio aunque cada validación haya pasado individualmente durante el proceso.
 
-* Revisá cada cambio antes de continuar.
+## Reglas
+
+* Podés modificar archivos únicamente después de recibir mi autorización.
 * Podés usar `.venv/bin/python -m ruff check --fix .` solamente después de mi autorización y para correcciones seguras.
 * Podés usar `.venv/bin/python -m ruff format .` solamente después de mi autorización.
-* No elimines, deshabilites ni alteres pruebas para conseguir que Pytest pase.
+* Revisá todos los cambios automáticos.
+* No elimines, deshabilites ni modifiques pruebas para conseguir que Pytest pase.
 * No reduzcas la cobertura.
-* No agregues `# noqa`, `# type: ignore`, exclusiones de Ruff o configuraciones de MyPy solamente para ocultar errores.
+* No agregues `# noqa` o `# type: ignore` solamente para ocultar errores.
+* No agregues exclusiones de Ruff o MyPy para ocultar problemas.
 * No debilites las validaciones existentes.
 * No cambies dependencias, versiones, migraciones, variables de entorno ni configuraciones sensibles sin solicitar una nueva autorización.
 * No realices `commit`, `push`, `merge`, `rebase`, `reset` ni operaciones destructivas.
 * Conservá el comportamiento funcional existente.
-* Si existen varias soluciones con consecuencias funcionales diferentes, explicalas y pedime que elija antes de modificar el código.
-* Si un error depende de servicios externos, credenciales, infraestructura o información no disponible, detenete y explicá el bloqueo.
-* No declares un comando como exitoso basándote en una ejecución anterior.
-* No uses resultados almacenados en otra terminal, otro entorno virtual, otro contenedor o una ejecución previa.
-* No confundas un problema del entorno con un error del código.
-* No declares `mypy app` como correcto si la salida contiene errores, aunque otro comando de MyPy haya finalizado correctamente.
-
-## Caso conocido que debe verificarse
-
-Prestá especial atención a `app/agents/evaluator.py`.
-
-Una ejecución real de:
-
-```bash
-mypy app
-```
-
-dentro del `.venv` reportó errores como:
-
-```text
-Argument 1 to "_candidate_payload" of "EvaluatorAgent" has incompatible type
-"Mapping[str, Any] | EventCandidate | Event";
-expected "Mapping[str, Any] | EventCandidate" [arg-type]
-```
-
-Los errores fueron detectados aproximadamente en las líneas:
-
-```text
-417
-511
-522
-536
-```
-
-No asumas que estos errores ya están corregidos. Verificá el contenido actual del archivo y ejecutá MyPy usando explícitamente:
-
-```bash
-.venv/bin/python -m mypy app
-```
-
-Si estos errores aparecen, detenete, explicá la incompatibilidad de tipos y pedime autorización antes de modificar `app/agents/evaluator.py`.
+* No uses resultados de ejecuciones anteriores.
+* No uses otro entorno virtual.
+* No uses el Python global del sistema.
+* No declares una validación como correcta si no fue ejecutada con `.venv/bin/python`.
+* Si un error depende de servicios externos, credenciales o infraestructura, detenete y explicá el bloqueo.
 
 ## Criterio de finalización
 
-La tarea solamente está terminada cuando los siguientes cuatro comandos, ejecutados desde la raíz actual del backend y utilizando su `.venv`, finalizan con código de salida `0`:
+La tarea solamente estará terminada cuando estos cuatro comandos finalicen con código de salida `0`:
 
 ```bash
 .venv/bin/python -m ruff check .
@@ -188,16 +156,18 @@ La tarea solamente está terminada cuando los siguientes cuatro comandos, ejecut
 
 Al finalizar, informá:
 
+* raíz del backend utilizada;
+* ruta del intérprete de Python;
 * entorno virtual utilizado;
-* ruta del intérprete;
 * errores encontrados;
 * archivos modificados;
 * correcciones realizadas;
-* comando exacto y código de salida de cada validación;
+* comando exacto ejecutado para cada validación;
+* código de salida de cada comando;
 * resultado final de Ruff Check;
 * resultado final de Ruff Format;
 * resultado final de MyPy;
 * resultado final de Pytest;
 * confirmación de si las cuatro validaciones quedaron al 100%.
 
-No declares que la tarea terminó correctamente si alguna validación continúa fallando o si fue ejecutada fuera del `.venv` correspondiente al backend.
+No declares que la tarea terminó correctamente si alguna validación continúa fallando o fue ejecutada fuera del `.venv` del backend.
