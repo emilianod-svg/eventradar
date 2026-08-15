@@ -1,15 +1,19 @@
-"""Cadena mínima Scrapy -> Collector -> Analyzer."""
+"""Cadena mínima Scrapy/RSS -> Collector (persistido) -> Analyzer.
+
+Movido a integración: desde que `CollectorAgent` persiste `raw_contents`
+(idempotencia real por hash, sección 13), necesita una fuente existente en
+la base (FK) y una conexión Tortoise real, no solo objetos en memoria.
+"""
 
 from __future__ import annotations
 
 from pathlib import Path
-from uuid import uuid4
 
 import pytest
 from app.agents.analyzer import AnalyzerAgent
 from app.agents.collector import CollectorAgent
-from app.domain.dedupe import dedupe_by_hash
 from app.domain.entities import SourceDefinition
+from app.models.source import Source
 from app.sources.rss_adapter import RssAdapter
 from app.sources.scrapy_adapter import ScrapyAdapter
 
@@ -28,18 +32,23 @@ class FakeLLMClient:
         }
 
 
-@pytest.mark.asyncio
-async def test_scrapy_collector_and_analyzer_chain(monkeypatch: pytest.MonkeyPatch) -> None:
-    fixture_path = (
-        Path(__file__).resolve().parents[1] / "fixtures" / "scrapy" / "ticketmisiones.html"
+async def _source_definition(*, name: str, base_url: str, adapter_type: str) -> SourceDefinition:
+    source = await Source.create(name=name, base_url=base_url, adapter_type=adapter_type)
+    return SourceDefinition(
+        id=source.id, name=source.name, base_url=source.base_url, adapter_type=adapter_type
     )
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_scrapy_collector_and_analyzer_chain(
+    monkeypatch: pytest.MonkeyPatch, tortoise_connection
+) -> None:
+    fixture_path = FIXTURES_DIR / "scrapy" / "ticketmisiones.html"
     html = fixture_path.read_text(encoding="utf-8")
 
-    source = SourceDefinition(
-        id=uuid4(),
-        name="Ticket Misiones",
-        base_url="https://ticketmisiones.com",
-        adapter_type="scrapy",
+    source = await _source_definition(
+        name="Ticket Misiones", base_url="https://ticketmisiones.com", adapter_type="scrapy"
     )
 
     adapter = ScrapyAdapter()
@@ -53,6 +62,7 @@ async def test_scrapy_collector_and_analyzer_chain(monkeypatch: pytest.MonkeyPat
     raw_candidates = await collector.execute(source)
 
     assert len(raw_candidates) == 2
+    assert all(candidate.id is not None for candidate in raw_candidates)
 
     analyzer = AnalyzerAgent(llm_client=FakeLLMClient())
     analyzed = await analyzer.execute(raw_candidates[0])
@@ -60,15 +70,20 @@ async def test_scrapy_collector_and_analyzer_chain(monkeypatch: pytest.MonkeyPat
     assert len(analyzed) == 1
     assert analyzed[0].title == "Feria Artesanal de Invierno"
     assert analyzed[0].confidence == 0.91
+    assert analyzed[0].classification_id is not None
 
 
+@pytest.mark.integration
 @pytest.mark.asyncio
-async def test_three_sources_collect_and_dedupe_chain(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_three_sources_collect_and_dedupe_chain(
+    monkeypatch: pytest.MonkeyPatch, tortoise_connection
+) -> None:
     """Ticket Misiones (HTML) + Misiones Online (RSS) + Misiones Cuatro (RSS).
 
     Cubre el criterio de aceptación de la tarea: las 3 fuentes fluyen por el
     Collector y, ante una segunda corrida con el mismo contenido, la
-    idempotencia por hash no deja pasar candidatos repetidos.
+    idempotencia por hash (ahora persistida en `raw_contents`) no deja pasar
+    candidatos repetidos.
     """
     ticket_misiones_html = (FIXTURES_DIR / "scrapy" / "ticketmisiones.html").read_text(
         encoding="utf-8"
@@ -98,20 +113,15 @@ async def test_three_sources_collect_and_dedupe_chain(monkeypatch: pytest.Monkey
 
     collector = CollectorAgent(scrapy_adapter=scrapy_adapter, rss_adapter=rss_adapter)
     sources = [
-        SourceDefinition(
-            id=uuid4(),
-            name="Ticket Misiones",
-            base_url="https://ticketmisiones.com",
-            adapter_type="scrapy",
+        await _source_definition(
+            name="Ticket Misiones", base_url="https://ticketmisiones.com", adapter_type="scrapy"
         ),
-        SourceDefinition(
-            id=uuid4(),
+        await _source_definition(
             name="Misiones Online",
             base_url="https://misionesonline.net/feed/",
             adapter_type="rss",
         ),
-        SourceDefinition(
-            id=uuid4(),
+        await _source_definition(
             name="Misiones Cuatro",
             base_url="https://misionescuatro.com/espectaculos/feed/",
             adapter_type="rss",
@@ -125,9 +135,7 @@ async def test_three_sources_collect_and_dedupe_chain(monkeypatch: pytest.Monkey
         return all_candidates
 
     first_cycle = await run_cycle()
-    new_in_first_cycle, seen_hashes = dedupe_by_hash(first_cycle)
-    assert len(new_in_first_cycle) == len(first_cycle) == 7  # 2 + 3 + 2
+    assert len(first_cycle) == 7  # 2 + 3 + 2
 
     second_cycle = await run_cycle()
-    new_in_second_cycle, _ = dedupe_by_hash(second_cycle, seen_hashes=seen_hashes)
-    assert new_in_second_cycle == []
+    assert second_cycle == []

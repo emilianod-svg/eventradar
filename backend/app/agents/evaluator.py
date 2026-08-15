@@ -7,7 +7,7 @@ LLM no participa en esta etapa.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from math import asin, cos, radians, sin, sqrt
 from typing import Any, cast
@@ -21,7 +21,13 @@ from app.domain.decisions import (
 )
 from app.domain.entities import EvaluationResult, EventCandidate
 from app.domain.enums import EvaluationDecisionType, ProcessingStatus
+from app.models.event import Event
 from app.services.matching.base import DuplicateMatcher, get_duplicate_matcher
+
+# `Event` (fila ya persistida) se suma a la unión porque
+# `OrchestratorAgent.register_existing_event` registra el modelo Tortoise
+# devuelto por `PersistenceAgent.execute`, no solo dicts/EventCandidate.
+ExistingEventLike = Mapping[str, Any] | EventCandidate | Event
 
 
 def _haversine_km(
@@ -47,7 +53,7 @@ def _haversine_km(
 class EvaluatorAgent:
     def __init__(
         self,
-        existing_events: list[Mapping[str, Any] | EventCandidate] | None = None,
+        existing_events: Sequence[ExistingEventLike] | None = None,
         duplicate_matcher: DuplicateMatcher | None = None,
         base_latitude: float | None = None,
         base_longitude: float | None = None,
@@ -64,6 +70,18 @@ class EvaluatorAgent:
         )
         self._now = now or (lambda: datetime.now(UTC))
 
+    def register_existing_event(self, event: ExistingEventLike) -> None:
+        """Suma un evento recién persistido al universo de deduplicación.
+
+        Sin esto, dos fuentes distintas publicando el mismo evento dentro
+        del mismo ciclo nunca se detectan como duplicado entre sí: el
+        Orquestador construye una única instancia de `EvaluatorAgent` por
+        ciclo con `existing_events` cargado al principio, así que hay que
+        registrar cada `ACCEPT`/`MERGE` a medida que ocurre para que el
+        siguiente candidato del mismo ciclo lo vea.
+        """
+        self._existing_events.append(event)
+
     async def execute(self, data: EventCandidate) -> EvaluationResult:
         reasons: list[str] = []
 
@@ -72,6 +90,7 @@ class EvaluatorAgent:
                 decision=EvaluationDecisionType.REJECT,
                 reasons=["publication_is_not_an_event"],
                 score=data.confidence,
+                event=data,
             )
 
         source_url = self._source_url(data)
@@ -80,6 +99,23 @@ class EvaluatorAgent:
                 decision=EvaluationDecisionType.REJECT,
                 reasons=["missing_source_url"],
                 score=data.confidence,
+                event=data,
+            )
+
+        if not data.title or not data.title.strip():
+            return EvaluationResult(
+                decision=EvaluationDecisionType.REJECT,
+                reasons=["missing_title"],
+                score=data.confidence,
+                event=data,
+            )
+
+        if not data.venue_name or not data.venue_name.strip():
+            return EvaluationResult(
+                decision=EvaluationDecisionType.REJECT,
+                reasons=["missing_venue_name"],
+                score=data.confidence,
+                event=data,
             )
 
         if data.confidence < CONFIDENCE_REVIEW_THRESHOLD:
@@ -87,6 +123,7 @@ class EvaluatorAgent:
                 decision=EvaluationDecisionType.REJECT,
                 reasons=["confidence_below_minimum"],
                 score=data.confidence,
+                event=data,
             )
 
         if data.start_at is None:
@@ -94,6 +131,7 @@ class EvaluatorAgent:
                 decision=EvaluationDecisionType.REJECT,
                 reasons=["missing_start_at"],
                 score=data.confidence,
+                event=data,
             )
 
         if data.start_at <= self._now():
@@ -101,6 +139,7 @@ class EvaluatorAgent:
                 decision=EvaluationDecisionType.REJECT,
                 reasons=["event_date_is_not_future"],
                 score=data.confidence,
+                event=data,
             )
 
         if data.end_at is not None and data.end_at < data.start_at:
@@ -108,6 +147,7 @@ class EvaluatorAgent:
                 decision=EvaluationDecisionType.REJECT,
                 reasons=["end_at_before_start_at"],
                 score=data.confidence,
+                event=data,
             )
 
         if data.latitude is not None and data.longitude is not None:
@@ -117,6 +157,7 @@ class EvaluatorAgent:
                     decision=EvaluationDecisionType.REJECT,
                     reasons=[f"outside_radius_{distance:.2f}km"],
                     score=data.confidence,
+                    event=data,
                 )
 
         if (
@@ -138,6 +179,7 @@ class EvaluatorAgent:
                     reasons=reasons + duplicate["reasons"],
                     duplicate_of=duplicate["id"],
                     score=score,
+                    event=data,
                 )
             if score >= DUPLICATE_REVIEW_THRESHOLD:
                 return EvaluationResult(
@@ -145,6 +187,7 @@ class EvaluatorAgent:
                     reasons=reasons + duplicate["reasons"],
                     duplicate_of=duplicate["id"],
                     score=score,
+                    event=data,
                 )
 
         if reasons:
@@ -152,12 +195,14 @@ class EvaluatorAgent:
                 decision=EvaluationDecisionType.REVIEW,
                 reasons=reasons,
                 score=data.confidence,
+                event=data,
             )
 
         return EvaluationResult(
             decision=EvaluationDecisionType.ACCEPT,
             reasons=["passed_validation"],
             score=data.confidence,
+            event=data,
         )
 
     def _find_duplicate(self, data: EventCandidate) -> dict[str, Any] | None:
@@ -179,7 +224,7 @@ class EvaluatorAgent:
                 }
         return best_match
 
-    def _candidate_payload(self, value: Mapping[str, Any] | EventCandidate) -> dict[str, Any]:
+    def _candidate_payload(self, value: ExistingEventLike) -> dict[str, Any]:
         if isinstance(value, Mapping):
             payload = dict(value)
         elif hasattr(value, "model_dump"):
@@ -206,12 +251,12 @@ class EvaluatorAgent:
             payload["source_url"] = self._source_url(value)
         return payload
 
-    def _existing_id(self, value: Mapping[str, Any] | EventCandidate) -> Any:
+    def _existing_id(self, value: ExistingEventLike) -> Any:
         if isinstance(value, Mapping):
             return value.get("id")
         return getattr(value, "id", None)
 
-    def _source_url(self, value: Mapping[str, Any] | EventCandidate) -> str | None:
+    def _source_url(self, value: ExistingEventLike) -> str | None:
         if isinstance(value, Mapping):
             source_url = value.get("source_url")
             if isinstance(source_url, str) and source_url.strip():
@@ -235,7 +280,7 @@ class EvaluatorAgent:
     def _date_compatible(
         self,
         candidate: dict[str, Any],
-        existing: Mapping[str, Any] | EventCandidate,
+        existing: ExistingEventLike,
     ) -> bool:
         candidate_start = candidate.get("start_at")
         existing_start = self._candidate_payload(existing).get("start_at")
@@ -246,7 +291,7 @@ class EvaluatorAgent:
     def _location_compatible(
         self,
         candidate: dict[str, Any],
-        existing: Mapping[str, Any] | EventCandidate,
+        existing: ExistingEventLike,
     ) -> bool:
         existing_payload = self._candidate_payload(existing)
         candidate_lat = candidate.get("latitude")
@@ -281,7 +326,7 @@ class EvaluatorAgent:
     def _distance_to_base(self, latitude: float | None, longitude: float | None) -> float | None:
         return _haversine_km(latitude, longitude, self._base_latitude, self._base_longitude)
 
-    def _venue_text(self, value: Mapping[str, Any] | EventCandidate) -> str | None:
+    def _venue_text(self, value: ExistingEventLike) -> str | None:
         if isinstance(value, Mapping):
             venue_name = value.get("venue_name")
             address = value.get("address")
