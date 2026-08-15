@@ -123,3 +123,29 @@ async def test_evaluator_rejects_events_outside_radius() -> None:
 
     assert result.decision == EvaluationDecisionType.REJECT
     assert any(reason.startswith("outside_radius_") for reason in result.reasons)
+
+
+@pytest.mark.asyncio
+async def test_register_existing_event_makes_it_visible_for_later_candidates() -> None:
+    """El Orquestador llama a esto tras persistir un ACCEPT/MERGE, para que
+    otra fuente del mismo ciclo publicando el mismo evento sí lo detecte
+    como duplicado (sección 10.2)."""
+    agent = EvaluatorAgent(existing_events=[])
+    accepted = await agent.execute(_candidate())
+    assert accepted.decision == EvaluationDecisionType.ACCEPT
+
+    agent.register_existing_event(
+        {
+            "id": uuid4(),
+            "title": "Festival del Litoral",
+            "venue_name": "Anfiteatro Manuel Antonio Ramirez",
+            "address": "Posadas, Misiones",
+            "start_at": datetime.now(UTC) + timedelta(days=2),
+            "latitude": -27.3671,
+            "longitude": -55.8961,
+        }
+    )
+
+    duplicate_from_another_source = await agent.execute(_candidate(source_id=uuid4()))
+
+    assert duplicate_from_another_source.decision == EvaluationDecisionType.MERGE
