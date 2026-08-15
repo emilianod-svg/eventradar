@@ -72,12 +72,18 @@ class EventCandidate(BaseModel):
 
     is_event: bool
     confidence: float = Field(ge=0.0, le=1.0)
+    source_id: UUID | None = None
+    source_url: str | None = None
     title: str | None = None
     start_at: datetime | None = None
     end_at: datetime | None = None
     recurrence_text: str | None = None
     venue_name: str | None = None
     address: str | None = None
+    latitude: float | None = None
+    longitude: float | None = None
+    geo_precision: str | None = None
+    geo_query: str | None = None
     price_text: str | None = None
     description: str | None = None
     category: str | None = None

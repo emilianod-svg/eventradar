@@ -1,7 +1,6 @@
 """Agentes del ciclo (sección 8 del plan).
 
-Cada módulo implementa el contrato `app.domain.entities.Agent`. En esta
-inicialización todos son *stubs* explícitos: definen la firma y la
-responsabilidad documentada en el plan, pero lanzan `NotImplementedError`
-para no simular un comportamiento que todavía no fue construido ni probado.
+Los contratos ya están definidos en `app.domain.entities.Agent`. Algunos
+agentes siguen como stubs explícitos, pero los que soportan la primera
+vertical ya implementan comportamiento determinístico y testeable.
 """
