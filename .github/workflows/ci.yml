@@ -62,6 +62,12 @@ jobs:
         working-directory: backend
         run: mypy app
 
+      - name: Migraciones (aerich upgrade)
+        working-directory: backend
+        env:
+          DATABASE_URL: postgres://eventradar:eventradar@localhost:5432/eventradar_test
+        run: aerich upgrade
+
       - name: Tests
         working-directory: backend
         env:

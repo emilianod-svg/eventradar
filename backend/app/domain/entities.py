@@ -57,6 +57,9 @@ class SourceDefinition(BaseModel):
 class RawContentCandidate(BaseModel):
     """Salida del Agente Recolector / entrada del Agente Analizador (8.4-8.5)."""
 
+    id: UUID | None = None
+    """PK de `raw_contents` una vez persistido por el Recolector (sección 13:
+    la deduplicación por hash ocurre ahí, no al final del pipeline)."""
     source_id: UUID
     url: str
     raw_text: str
@@ -72,6 +75,9 @@ class EventCandidate(BaseModel):
 
     is_event: bool
     confidence: float = Field(ge=0.0, le=1.0)
+    classification_id: UUID | None = None
+    """PK de `classifications` persistida por el Analizador — la necesita el
+    Agente de Persistencia para el FK de `evaluation_decisions` (8.7/8.8)."""
     source_id: UUID | None = None
     source_url: str | None = None
     title: str | None = None
@@ -100,9 +106,16 @@ class EventCandidate(BaseModel):
 
 
 class EvaluationResult(BaseModel):
-    """Salida del Agente Evaluador (sección 8.7)."""
+    """Salida del Agente Evaluador (sección 8.7) / entrada del Agente de Persistencia (8.8).
+
+    Incluye el `EventCandidate` evaluado: el Evaluador no muta ni resume el
+    candidato, solo produce una decisión sobre él, y el de Persistencia
+    necesita los campos completos (título, fecha, venue...) para poder
+    escribir el `Event`.
+    """
 
     decision: str  # ACCEPT | REJECT | REVIEW | MERGE
     reasons: list[str] = Field(default_factory=list)
     duplicate_of: UUID | None = None
     score: float | None = None
+    event: EventCandidate

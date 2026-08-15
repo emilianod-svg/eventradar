@@ -7,16 +7,28 @@ continuar, 0.50-0.69 revisión, <0.50 rechazar).
 Sección 9.2 exige permitir múltiples eventos por publicación: el LLM
 devuelve `{"events": [...]}` (prompt v2) y cada elemento se procesa y
 filtra de forma independiente.
+
+Persiste una `Classification` por `raw_content` con la respuesta cruda del
+LLM (sección 8.5, paso 8: "registrar modelo, versión del prompt, tokens,
+latencia y costo estimado"). `LLMClient.extract_event` hoy solo devuelve el
+JSON del schema de la sección 9.1, sin tokens/costo — se registran `None`
+en esos campos hasta que el cliente los exponga; `model_name` y
+`latency_ms` sí se pueden medir acá.
 """
 
 from __future__ import annotations
 
+import time
 from datetime import UTC
+from uuid import UUID
 
+from app.config import get_settings
 from app.domain.decisions import CONFIDENCE_ACCEPT_THRESHOLD, CONFIDENCE_REVIEW_THRESHOLD
 from app.domain.entities import EventCandidate, RawContentCandidate
 from app.domain.enums import ProcessingStatus
+from app.models.classification import Classification
 from app.services.llm.base import LLMClient, get_llm_client
+from app.services.llm.prompts import ANALYZER_PROMPT_VERSION
 
 
 class AnalyzerAgent:
@@ -24,14 +36,35 @@ class AnalyzerAgent:
         self._llm_client = llm_client or get_llm_client()
 
     async def execute(self, data: RawContentCandidate) -> list[EventCandidate]:
+        started_at = time.monotonic()
         extracted = await self._llm_client.extract_event(
             text=data.raw_text,
             extraction_date_iso=data.fetched_at.isoformat(),
         )
+        latency_ms = (time.monotonic() - started_at) * 1000
+
+        events_list = self._extract_events_list(extracted)
+        classification_id = None
+        if data.id is not None:
+            classification = await Classification.create(
+                raw_content_id=data.id,
+                is_event=any(bool(event.get("is_event")) for event in events_list),
+                confidence=max(
+                    (float(event.get("confidence") or 0.0) for event in events_list),
+                    default=0.0,
+                ),
+                extracted_fields=extracted,
+                model_name=get_settings().llm_model,
+                prompt_version=ANALYZER_PROMPT_VERSION,
+                latency_ms=latency_ms,
+            )
+            classification_id = classification.id
 
         results: list[EventCandidate] = []
-        for event_dict in self._extract_events_list(extracted):
-            candidate = EventCandidate.model_validate(self._normalize_candidate(event_dict, data))
+        for event_dict in events_list:
+            candidate = EventCandidate.model_validate(
+                self._normalize_candidate(event_dict, data, classification_id)
+            )
 
             if not candidate.is_event:
                 continue
@@ -64,10 +97,12 @@ class AnalyzerAgent:
         self,
         extracted: dict,
         data: RawContentCandidate,
+        classification_id: UUID | None,
     ) -> dict:
         normalized = dict(extracted)
         normalized.setdefault("description", data.raw_text)
         normalized.setdefault("title", self._extract_title(data.raw_text))
+        normalized.setdefault("classification_id", classification_id)
         normalized.setdefault("source_id", data.source_id)
         normalized.setdefault("source_url", data.url)
         normalized.setdefault("evidence", {})
