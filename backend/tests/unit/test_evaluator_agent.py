@@ -66,9 +66,7 @@ async def test_evaluator_reviews_low_confidence_events() -> None:
 async def test_evaluator_rejects_missing_required_fields() -> None:
     agent = EvaluatorAgent(existing_events=[])
 
-    result = await agent.execute(
-        _candidate(title="", venue_name=" ", address="", confidence=0.9)
-    )
+    result = await agent.execute(_candidate(title="", venue_name=" ", address="", confidence=0.9))
 
     assert result.decision == EvaluationDecisionType.REJECT
     assert result.reasons == [
@@ -102,9 +100,7 @@ async def test_evaluator_rejects_inaccessible_source_url() -> None:
 async def test_evaluator_rejects_events_beyond_future_horizon() -> None:
     agent = EvaluatorAgent(existing_events=[], max_future_days=30)
 
-    result = await agent.execute(
-        _candidate(start_at=datetime.now(UTC) + timedelta(days=31))
-    )
+    result = await agent.execute(_candidate(start_at=datetime.now(UTC) + timedelta(days=31)))
 
     assert result.decision == EvaluationDecisionType.REJECT
     assert result.reasons == ["event_date_beyond_horizon"]

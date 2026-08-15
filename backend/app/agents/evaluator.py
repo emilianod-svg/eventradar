@@ -8,8 +8,8 @@ LLM no participa en esta etapa.
 from __future__ import annotations
 
 import inspect
-import json
 import ipaddress
+import json
 from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime, timedelta
 from math import asin, cos, radians, sin, sqrt
@@ -412,13 +412,11 @@ class EvaluatorAgent:
         candidate_payload: Mapping[str, Any],
         existing: Mapping[str, Any] | EventCandidate,
     ) -> bool:
-        if self._date_compatible(candidate_payload, existing):
-            return True
-        if self._location_compatible(candidate_payload, existing):
-            return True
-        if self._title_similarity(candidate_payload, existing) >= 0.50:
-            return True
-        return False
+        return (
+            self._date_compatible(candidate_payload, existing)
+            or self._location_compatible(candidate_payload, existing)
+            or self._title_similarity(candidate_payload, existing) >= 0.50
+        )
 
     def _candidate_payload(self, value: Mapping[str, Any] | EventCandidate) -> dict[str, Any]:
         if isinstance(value, Mapping):
@@ -475,7 +473,7 @@ class EvaluatorAgent:
 
     def _date_compatible(
         self,
-        candidate: dict[str, Any],
+        candidate: Mapping[str, Any],
         existing: Mapping[str, Any] | EventCandidate,
     ) -> bool:
         candidate_start = candidate.get("start_at")
@@ -486,7 +484,7 @@ class EvaluatorAgent:
 
     def _location_compatible(
         self,
-        candidate: dict[str, Any],
+        candidate: Mapping[str, Any],
         existing: Mapping[str, Any] | EventCandidate,
     ) -> bool:
         existing_payload = self._candidate_payload(existing)
@@ -556,7 +554,8 @@ class EvaluatorAgent:
 
         host = host.casefold()
         if self._allowed_source_hosts and not any(
-            host == allowed or host.endswith(f".{allowed}") for allowed in self._allowed_source_hosts
+            host == allowed or host.endswith(f".{allowed}")
+            for allowed in self._allowed_source_hosts
         ):
             return False
 
@@ -566,11 +565,7 @@ class EvaluatorAgent:
             return host not in {"localhost"}
 
         return not (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
+            ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast
         )
 
     def _distance_to_base(self, latitude: float | None, longitude: float | None) -> float | None:
