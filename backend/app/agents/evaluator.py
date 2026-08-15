@@ -449,7 +449,7 @@ class EvaluatorAgent:
             or self._title_similarity(candidate_payload, existing) >= 0.50
         )
 
-    def _candidate_payload(self, value: Mapping[str, Any] | EventCandidate) -> dict[str, Any]:
+    def _candidate_payload(self, value: ExistingEventLike) -> dict[str, Any]:
         if isinstance(value, Mapping):
             payload = dict(value)
         elif hasattr(value, "model_dump"):
