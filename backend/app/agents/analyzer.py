@@ -144,6 +144,7 @@ class AnalyzerAgent:
         if not isinstance(value, dict):
             return {}
         return {key: item for key, item in value.items() if isinstance(item, str)}
+
     def _enrich_candidate(
         self,
         candidate: dict,
