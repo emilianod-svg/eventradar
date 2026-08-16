@@ -1,109 +1,173 @@
-## Validación de pruebas omitidas
+---
 
-Pytest no se considera completamente exitoso si las pruebas de integración fueron omitidas por falta de configuración.
+description: Ejecuta las validaciones de calidad del backend y solicita autorización antes de corregir errores
+agent: build
+------------
 
-Ejecutá Pytest mostrando los motivos de todas las pruebas omitidas:
+Tu objetivo es verificar y corregir todas las validaciones de calidad del backend hasta dejarlas al 100%.
 
-```bash
-.venv/bin/python -m pytest \
-  --cov=app \
-  --cov-report=term-missing \
-  -rs
-```
+## Ejecución inicial
 
-Después de ejecutarlo, revisá:
+Podés ejecutar las validaciones iniciales sin solicitar autorización.
 
-* cantidad de pruebas recolectadas;
-* cantidad de pruebas aprobadas;
-* cantidad de pruebas fallidas;
-* cantidad de pruebas omitidas;
-* motivo de cada prueba omitida.
+Antes de comenzar:
 
-Si alguna prueba se omite porque `TEST_DATABASE_URL` no está definida:
+1. Informá que vas a ejecutar las cuatro validaciones.
+2. Ubicate en la raíz del backend.
+3. Verificá que exista el entorno virtual `.venv`.
+4. No modifiques archivos ni apliques correcciones automáticas durante esta primera ejecución.
 
-1. No declares que las validaciones quedaron al 100%.
-2. No inventes una URL de conexión.
-3. Buscá la configuración existente mediante:
+## Entorno virtual obligatorio
+
+Todas las validaciones deben ejecutarse usando explícitamente el Python del entorno virtual del backend.
+
+Primero verificá:
 
 ```bash
-rg -n "TEST_DATABASE_URL|DATABASE_URL|POSTGRES_DB|POSTGRES_USER|POSTGRES_PASSWORD" \
-  .github docker-compose*.yml .env .env.example tests/conftest.py 2>/dev/null
+pwd
+test -d app
+test -f pyproject.toml
+test -x .venv/bin/python
+.venv/bin/python -c "import sys; print(sys.executable)"
+.venv/bin/python -m ruff --version
+.venv/bin/python -m mypy --version
+.venv/bin/python -m pytest --version
 ```
 
-4. Identificá:
+La ruta informada por `sys.executable` debe terminar en:
 
-    * host;
-    * puerto;
-    * nombre de la base;
-    * usuario;
-    * origen seguro de la contraseña;
-    * configuración utilizada por GitHub Actions.
+```text
+backend/.venv/bin/python
+```
 
-5. Verificá que la base esté destinada exclusivamente a pruebas.
+No ejecutes directamente:
 
-6. No ejecutes pruebas contra bases de producción, QA, desarrollo compartido ni bases que contengan información importante.
+```bash
+ruff
+mypy
+pytest
+```
 
-7. Si no existe una base local exclusiva para pruebas o es necesario crearla, modificar Docker Compose, configurar credenciales o cambiar variables de entorno, detenete y pedime autorización.
+Esos comandos podrían utilizar instalaciones globales de Ubuntu y producir resultados diferentes.
+
+Usá siempre `.venv/bin/python -m ...`.
+
+Si `.venv` no existe o alguna herramienta no está instalada dentro del entorno virtual, detenete y explicá el problema. No instales ni actualices dependencias sin mi autorización.
+
+## Validaciones
+
+Ejecutá desde la raíz del backend, en este orden:
+
+```bash
+.venv/bin/python -m ruff check .
+.venv/bin/python -m ruff format --check .
+.venv/bin/python -m mypy app
+.venv/bin/python -m pytest
+```
+
+Para cada validación registrá:
+
+* comando exacto;
+* directorio de ejecución;
+* salida relevante;
+* código de salida.
+
+Una validación solamente se considera correcta si finaliza con código de salida `0`.
+
+## Cuando una validación falla
+
+Detenete en la primera validación que falle.
+
+Antes de modificar archivos:
+
+1. Identificá el comando que falló.
+2. Informá el código de salida.
+3. Indicá el archivo y la línea del error.
+4. Mostrá el mensaje relevante.
+5. Explicá la causa probable.
+6. Indicá la corrección recomendada.
+7. Enumerá los archivos que necesitarías modificar.
+8. Pedí mi autorización explícita para aplicar las correcciones.
+9. Esperá mi respuesta.
 
 La solicitud debe ser similar a:
 
-> Las pruebas de integración fueron omitidas porque `TEST_DATABASE_URL` no está definida. Para ejecutarlas necesito configurar una base PostgreSQL exclusiva para pruebas y definir la variable de entorno correspondiente. ¿Me autorizás a realizar esta configuración?
+> Encontré errores al ejecutar `.venv/bin/python -m mypy app`. Para corregirlos necesito modificar `app/agents/evaluator.py`. ¿Me autorizás a aplicar las correcciones y repetir las validaciones hasta dejarlas al 100%?
 
-Después de recibir autorización, configurá `TEST_DATABASE_URL` utilizando los datos reales del proyecto.
+No modifiques archivos ni ejecutes comandos de corrección automática hasta recibir una respuesta afirmativa.
 
-Antes de ejecutar las pruebas, verificá que esté disponible:
+## Después de recibir autorización
 
-```bash
-.venv/bin/python -c "import os; value = os.getenv('TEST_DATABASE_URL'); print('definida' if value else 'no definida')"
-```
+Una vez autorizado:
 
-No muestres contraseñas ni la URL completa en el informe.
+1. Aplicá la corrección.
+2. Revisá los cambios realizados.
+3. Ejecutá nuevamente la validación afectada.
+4. Continuá con la siguiente validación solamente cuando la anterior pase.
+5. Repetí el proceso hasta que las cuatro validaciones finalicen correctamente.
+6. No solicites autorización por cada corrección del mismo tipo.
+7. Si aparece una decisión con consecuencias funcionales diferentes, detenete, explicá las alternativas y pedime que elija.
 
-Una vez configurada, ejecutá primero las pruebas de integración:
+## Validación final completa
 
-```bash
-.venv/bin/python -m pytest \
-  tests/integration \
-  -vv -s --tb=long -rs
-```
-
-Luego ejecutá la suite completa:
+Después de realizar correcciones, ejecutá nuevamente las cuatro validaciones completas:
 
 ```bash
-.venv/bin/python -m pytest \
-  --cov=app \
-  --cov-report=term-missing \
-  -rs
+.venv/bin/python -m ruff check .
+.venv/bin/python -m ruff format --check .
+.venv/bin/python -m mypy app
+.venv/bin/python -m pytest
 ```
 
-Las tres pruebas smoke del LLM pueden permanecer omitidas cuando `RUN_LLM_SMOKE_TESTS` no esté definida, siempre que estén documentadas como pruebas opcionales que requieren un servicio LLM real.
+Esto es obligatorio aunque cada validación haya pasado individualmente durante el proceso.
 
-Las pruebas de integración que dependen de `TEST_DATABASE_URL` no deben omitirse en la validación completa del backend.
+## Reglas
 
-## Criterio adicional de finalización
+* Podés modificar archivos únicamente después de recibir mi autorización.
+* Podés usar `.venv/bin/python -m ruff check --fix .` solamente después de mi autorización y para correcciones seguras.
+* Podés usar `.venv/bin/python -m ruff format .` solamente después de mi autorización.
+* Revisá todos los cambios automáticos.
+* No elimines, deshabilites ni modifiques pruebas para conseguir que Pytest pase.
+* No reduzcas la cobertura.
+* No agregues `# noqa` o `# type: ignore` solamente para ocultar errores.
+* No agregues exclusiones de Ruff o MyPy para ocultar problemas.
+* No debilites las validaciones existentes.
+* No cambies dependencias, versiones, migraciones, variables de entorno ni configuraciones sensibles sin solicitar una nueva autorización.
+* No realices `commit`, `push`, `merge`, `rebase`, `reset` ni operaciones destructivas.
+* Conservá el comportamiento funcional existente.
+* No uses resultados de ejecuciones anteriores.
+* No uses otro entorno virtual.
+* No uses el Python global del sistema.
+* No declares una validación como correcta si no fue ejecutada con `.venv/bin/python`.
+* Si un error depende de servicios externos, credenciales o infraestructura, detenete y explicá el bloqueo.
 
-Pytest solamente se considera validado al 100% cuando:
+## Criterio de finalización
 
-* finaliza con código de salida `0`;
-* las pruebas unitarias se ejecutan correctamente;
-* las pruebas de integración se ejecutan correctamente;
-* las pruebas E2E determinísticas se ejecutan correctamente;
-* no existen pruebas omitidas por falta de `TEST_DATABASE_URL`;
-* cualquier prueba smoke omitida está identificada como opcional;
-* el resultado es equivalente al pipeline de GitHub Actions.
+La tarea solamente estará terminada cuando estos cuatro comandos finalicen con código de salida `0`:
 
-Un resultado como el siguiente no debe declararse al 100%:
-
-```text
-74 passed, 26 skipped
+```bash
+.venv/bin/python -m ruff check .
+.venv/bin/python -m ruff format --check .
+.venv/bin/python -m mypy app
+.venv/bin/python -m pytest
 ```
 
-si las pruebas omitidas incluyen pruebas de integración o E2E.
+## Informe final
 
-El resultado esperado puede contener las pruebas smoke opcionales omitidas, por ejemplo:
+Al finalizar, informá:
 
-```text
-97 passed, 3 skipped
-```
+* raíz del backend utilizada;
+* ruta del intérprete de Python;
+* entorno virtual utilizado;
+* errores encontrados;
+* archivos modificados;
+* correcciones realizadas;
+* comando exacto ejecutado para cada validación;
+* código de salida de cada comando;
+* resultado final de Ruff Check;
+* resultado final de Ruff Format;
+* resultado final de MyPy;
+* resultado final de Pytest;
+* confirmación de si las cuatro validaciones quedaron al 100%.
 
-siempre que esas tres pruebas correspondan exclusivamente a los smoke tests que requieren `RUN_LLM_SMOKE_TESTS`.
+No declares que la tarea terminó correctamente si alguna validación continúa fallando o fue ejecutada fuera del `.venv` del backend.

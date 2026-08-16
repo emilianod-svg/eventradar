@@ -6,7 +6,8 @@ Uso:
 
 Opcional:
   ../.venv/bin/python scripts/validate_sources.py --check-access
-  ../.venv/bin/python scripts/validate_sources.py --allowed-hosts ticketmisiones.com,misionesonline.net
+  ../.venv/bin/python scripts/validate_sources.py --allowed-hosts
+  ticketmisiones.com,misionesonline.net
 """
 
 from __future__ import annotations
@@ -66,7 +67,11 @@ def _check_url(base_url: object, *, allowed_hosts: set[str]) -> tuple[str | None
         reasons.append("missing_host")
 
     host = (parsed.hostname or "").casefold()
-    if allowed_hosts and host and not any(host == allowed or host.endswith(f".{allowed}") for allowed in allowed_hosts):
+    if (
+        allowed_hosts
+        and host
+        and not any(host == allowed or host.endswith(f".{allowed}") for allowed in allowed_hosts)
+    ):
         reasons.append("host_not_allowed")
 
     return url, reasons
@@ -113,7 +118,14 @@ async def main() -> int:
                 ok = False
 
         checks.append(
-            SourceCheck(name=name, base_url=url, active=active, ok=ok, skipped=skipped, reasons=reasons)
+            SourceCheck(
+                name=name,
+                base_url=url,
+                active=active,
+                ok=ok,
+                skipped=skipped,
+                reasons=reasons,
+            )
         )
 
     for check in checks:

@@ -97,7 +97,8 @@ async def main() -> int:
         print("\nMismatches:")
         for item in failed:
             print(
-                f"- {item['id']}: decision={item['decision']} score={item['score']} expected={item['expected']}"
+                f"- {item['id']}: decision={item['decision']} "
+                f"score={item['score']} expected={item['expected']}"
             )
 
     return 1 if failed and not args.no_strict else 0

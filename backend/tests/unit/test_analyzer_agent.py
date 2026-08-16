@@ -137,7 +137,8 @@ async def test_analyzer_agent_infers_missing_event_fields_from_text() -> None:
         raw_text=(
             "…Y Dios fue a terapia\n"
             "En ese marco, se presentará la función el 4 de septiembre a las 21:30 horas. "
-            "Será en el Auditorio de la Escuela de Rock (EDR), ubicado en calle 3 de Febrero 1660 de Posadas."
+            "Será en el Auditorio de la Escuela de Rock (EDR), ubicado en calle 3 de "
+            "Febrero 1660 de Posadas."
         ),
         fetched_at=datetime(2026, 8, 16, tzinfo=UTC),
         published_at=datetime(2026, 8, 8, tzinfo=UTC),
@@ -167,9 +168,7 @@ async def test_analyzer_agent_uses_published_at_as_extraction_anchor_when_availa
         published_at=datetime(2026, 8, 12, tzinfo=UTC),
         content_hash="hash",
     )
-    llm = RecordingLLMClient(
-        {"is_event": True, "confidence": 0.9, "title": "La Oreja Perpleja"}
-    )
+    llm = RecordingLLMClient({"is_event": True, "confidence": 0.9, "title": "La Oreja Perpleja"})
 
     agent = AnalyzerAgent(llm_client=llm)
     result = await agent.execute(raw)

@@ -18,9 +18,9 @@ en esos campos hasta que el cliente los exponga; `model_name` y
 
 from __future__ import annotations
 
-import time
 import re
-from datetime import UTC, timedelta
+import time
+from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
 from app.config import get_settings
@@ -66,9 +66,7 @@ class AnalyzerAgent:
         for event_dict in events_list:
             normalized = self._normalize_candidate(event_dict, data, classification_id)
             normalized = self._enrich_candidate(normalized, data)
-            candidate = EventCandidate.model_validate(
-                normalized
-            )
+            candidate = EventCandidate.model_validate(normalized)
 
             if not candidate.is_event:
                 continue
@@ -161,7 +159,11 @@ class AnalyzerAgent:
         if not enriched.get("venue_name") and enriched.get("title"):
             enriched["venue_name"] = enriched["title"]
 
-        if not enriched.get("is_event") and enriched.get("start_at") and self._looks_event_like(data.raw_text):
+        if (
+            not enriched.get("is_event")
+            and enriched.get("start_at")
+            and self._looks_event_like(data.raw_text)
+        ):
             enriched["is_event"] = True
 
         return enriched

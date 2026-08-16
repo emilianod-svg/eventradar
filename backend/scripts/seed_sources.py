@@ -101,7 +101,10 @@ async def main() -> int:
 
             print(f"{action.upper():6} {payload['name']} | {payload['base_url']}")
 
-        print(f"\nResumen: create={created} update={updated} skipped={skipped} dry_run={args.dry_run}")
+        print(
+            f"\nResumen: create={created} update={updated} "
+            f"skipped={skipped} dry_run={args.dry_run}"
+        )
         return 0
     finally:
         if not args.dry_run:
