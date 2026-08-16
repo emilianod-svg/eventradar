@@ -75,7 +75,20 @@ class AnalyzerAgent:
             # Sección 9.2: "rechazar noticias sobre eventos pasados". El prompt
             # ya se lo pide al LLM, pero no es determinístico — se valida acá
             # como red de seguridad (caso obligatorio de la sección 18.3).
-            if candidate.start_at is not None and candidate.start_at < data.fetched_at:
+            start_at = candidate.start_at
+            if start_at is not None and start_at.tzinfo is None:
+                # El LLM a veces devuelve fechas sin offset; fetched_at
+                # siempre es aware, así que asumimos UTC para poder comparar.
+                # TODO(mejora futura): esto asume que la hora naive ya está en
+                # UTC, pero en la práctica el LLM suele devolver hora local del
+                # evento (ej. "20:00" pensando en horario de Argentina). Lo
+                # correcto sería interpretar el naive datetime como
+                # `settings.timezone` (America/Argentina/Cordoba, ver
+                # app/config.py:73 — hoy solo se usa para el scheduler) y
+                # convertir a UTC desde ahí, en vez de asumir que ya es UTC.
+                # Requiere zoneinfo.ZoneInfo(settings.timezone) en vez de UTC.
+                start_at = start_at.replace(tzinfo=UTC)
+            if start_at is not None and start_at < data.fetched_at:
                 continue
             if candidate.confidence < CONFIDENCE_ACCEPT_THRESHOLD:
                 candidate = candidate.model_copy(
