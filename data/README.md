@@ -8,20 +8,14 @@ inventaron URLs** (regla obligatoria del prompt de inicialización). Cargar
 con un script propio del equipo una vez confirmadas, o mediante
 `POST /api/v1/internal/sources`.
 
-## Pendientes (sección 3.3 del plan)
+## `evaluation_posadas.json`
 
-Los siguientes dos datasets **no se generaron en esta inicialización**
-porque no existen en el repositorio ni fueron provistos, y crearlos
-implicaría inventar datos:
+Dataset etiquetado específico de Posadas para evaluar geocodificación,
+normalización, umbrales y resiliencia. Incluye casos válidos, ambiguos,
+inválidos y con errores ortográficos, además de abreviaturas y ubicaciones
+fuera de alcance.
 
-- `seed_events_san_luis.json`: dataset histórico (~100 eventos de San Luis)
-  mencionado en el plan como disponible para el equipo. Falta incorporarlo
-  al repositorio si el equipo decide usarlo para probar estructura,
-  clasificación y deduplicación (no sirve para validar cobertura ni
-  geolocalización de Posadas).
-- `evaluation_posadas.json`: dataset etiquetado específico de Posadas (20
-  eventos reales o sintéticos controlados, 10 publicaciones que no son
-  eventos, 5 duplicados redactados distinto, 5 casos ambiguos). Es un
-  bloqueante del checklist del plan (sección 25) y debe construirlo el
-  equipo con casos reales o cuidadosamente sintéticos, no un agente
-  automatizado.
+## `seed_events_san_luis.json`
+
+El dataset histórico mencionado en el plan sigue pendiente de incorporación.
+No se generó automáticamente porque no fue provisto en el repositorio.

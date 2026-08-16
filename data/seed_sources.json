@@ -2,7 +2,7 @@
   {
     "name": "Ticket Misiones",
     "adapter_type": "SCRAPY_STATIC",
-    "base_url": null,
+    "base_url": "https://ticketmisiones.com/",
     "active": false,
     "reliability_score": 0.5,
     "notes": "URL exacta pendiente de confirmación por el equipo (no inventada)."

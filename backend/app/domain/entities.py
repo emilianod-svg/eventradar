@@ -88,8 +88,15 @@ class EventCandidate(BaseModel):
     address: str | None = None
     latitude: float | None = None
     longitude: float | None = None
+    city: str | None = None
+    state: str | None = None
+    country_code: str | None = None
     geo_precision: str | None = None
     geo_query: str | None = None
+    geo_decision: str | None = None
+    geo_provider: str | None = None
+    geo_score_breakdown: dict[str, float] = Field(default_factory=dict)
+    matched_catalog_entry: str | None = None
     price_text: str | None = None
     description: str | None = None
     category: str | None = None

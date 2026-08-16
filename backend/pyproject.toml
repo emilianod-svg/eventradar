@@ -30,6 +30,13 @@ dev = [
     "asgi-lifespan>=2.1,<3.0",
 ]
 
+[project.scripts]
+eventradar-seed-sources = "scripts.seed_sources:main"
+eventradar-run-cycle-once = "scripts.run_cycle_once:main"
+eventradar-eval-geo = "scripts.eval_geo_dataset:main"
+eventradar-eval-duplicates = "scripts.eval_duplicates_dataset:main"
+eventradar-validate-sources = "scripts.validate_sources:main"
+
 [build-system]
 requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
