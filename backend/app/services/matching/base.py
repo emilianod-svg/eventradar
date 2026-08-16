@@ -116,9 +116,16 @@ class RapidFuzzDuplicateMatcher:
         if not normalized_left or not normalized_right:
             return 0.0
 
+        wratio_score = fuzz.WRatio(normalized_left, normalized_right) / 100.0
         token_score = fuzz.token_set_ratio(normalized_left, normalized_right) / 100.0
+        sort_score = fuzz.token_sort_ratio(normalized_left, normalized_right) / 100.0
         levenshtein_score = Levenshtein.normalized_similarity(normalized_left, normalized_right)
-        return (token_score * 0.80) + (levenshtein_score * 0.20)
+        return (
+            (wratio_score * 0.35)
+            + (token_score * 0.35)
+            + (sort_score * 0.15)
+            + (levenshtein_score * 0.15)
+        )
 
     def _venue_text(self, value: Mapping[str, Any] | Any) -> str | None:
         venue_name = _get_field(value, "venue_name")

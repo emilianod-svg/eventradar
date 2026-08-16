@@ -1,0 +1,242 @@
+[
+  {
+    "id": "dup_01_exact_cross_source",
+    "case_type": "duplicate",
+    "candidate": {
+      "source_name": "Misiones Online",
+      "source_url": "https://misionesonline.net/feed/nota-festival-del-litoral",
+      "title": "Festival del Litoral",
+      "venue_name": "Anfiteatro Manuel Antonio Ramirez",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-08-20T20:00:00Z",
+      "latitude": -27.3671,
+      "longitude": -55.8961
+    },
+    "existing": {
+      "source_name": "Ticket Misiones",
+      "source_url": "https://ticketmisiones.com/eventos/festival-del-litoral",
+      "title": "Festival del Litoral",
+      "venue_name": "Anfiteatro Manuel Antonio Ramirez",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-08-20T20:00:00Z",
+      "latitude": -27.3671,
+      "longitude": -55.8961
+    },
+    "expected": {
+      "decision": "MERGE",
+      "score_min": 0.9,
+      "date_compatible": true,
+      "location_compatible": true
+    }
+  },
+  {
+    "id": "dup_02_typo_same_event",
+    "case_type": "duplicate",
+    "candidate": {
+      "source_name": "Misiones Online",
+      "source_url": "https://misionesonline.net/feed/nota-noche-de-jazz",
+      "title": "Noche de Jazz en Posadas",
+      "venue_name": "Casa de la Cultura",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-08-21T20:00:00Z",
+      "latitude": -27.3674,
+      "longitude": -55.8958
+    },
+    "existing": {
+      "source_name": "Ticket Misiones",
+      "source_url": "https://ticketmisiones.com/eventos/noche-de-jazz",
+      "title": "Noche de Jazzz",
+      "venue_name": "Casa de la Cultura",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-08-21T20:00:00Z",
+      "latitude": -27.3674,
+      "longitude": -55.8958
+    },
+    "expected": {
+      "decision": "REVIEW",
+      "score_min": 0.75,
+      "date_compatible": true,
+      "location_compatible": true
+    }
+  },
+  {
+    "id": "dup_03_same_event_shifted_date",
+    "case_type": "duplicate",
+    "candidate": {
+      "source_name": "Misiones Online",
+      "source_url": "https://misionesonline.net/feed/nota-feria-emprendedores",
+      "title": "Feria de Emprendedores",
+      "venue_name": "Plaza 9 de Julio",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-08-23T18:00:00Z",
+      "latitude": -27.3672,
+      "longitude": -55.8960
+    },
+    "existing": {
+      "source_name": "Ticket Misiones",
+      "source_url": "https://ticketmisiones.com/eventos/feria-de-emprendedores",
+      "title": "Feria de Emprendedores",
+      "venue_name": "Plaza 9 de Julio",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-08-28T18:00:00Z",
+      "latitude": -27.3672,
+      "longitude": -55.8960
+    },
+    "expected": {
+      "decision": "REVIEW",
+      "score_min": 0.75,
+      "date_compatible": false,
+      "location_compatible": true
+    }
+  },
+  {
+    "id": "dup_04_same_title_different_place",
+    "case_type": "duplicate",
+    "candidate": {
+      "source_name": "Misiones Online",
+      "source_url": "https://misionesonline.net/feed/nota-recital-rock",
+      "title": "Recital de Rock",
+      "venue_name": "Paseo Bosetti",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-08-24T21:00:00Z",
+      "latitude": -27.3668,
+      "longitude": -55.8963
+    },
+    "existing": {
+      "source_name": "Ticket Misiones",
+      "source_url": "https://ticketmisiones.com/eventos/recital-de-rock",
+      "title": "Recital de Rock",
+      "venue_name": "Anfiteatro Manuel Antonio Ramirez",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-08-24T21:00:00Z",
+      "latitude": -27.3671,
+      "longitude": -55.8961
+    },
+    "expected": {
+      "decision": "MERGE",
+      "score_min": 0.9,
+      "date_compatible": true,
+      "location_compatible": true
+    }
+  },
+  {
+    "id": "dup_05_different_event_same_day",
+    "case_type": "duplicate",
+    "candidate": {
+      "source_name": "Misiones Online",
+      "source_url": "https://misionesonline.net/feed/nota-taller-fotografia",
+      "title": "Taller de Fotografía",
+      "venue_name": "Centro de Conocimiento",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-08-26T16:00:00Z",
+      "latitude": -27.3669,
+      "longitude": -55.8962
+    },
+    "existing": {
+      "source_name": "Ticket Misiones",
+      "source_url": "https://ticketmisiones.com/eventos/festival-de-teatro",
+      "title": "Festival de Teatro",
+      "venue_name": "Teatro Lirico",
+      "address": "Parque del Conocimiento, Posadas",
+      "start_at": "2026-08-26T20:00:00Z",
+      "latitude": -27.3670,
+      "longitude": -55.8962
+    },
+    "expected": {
+      "decision": "ACCEPT",
+      "score_min": 0.0,
+      "date_compatible": false,
+      "location_compatible": false
+    }
+  },
+  {
+    "id": "dup_06_false_positive_guard",
+    "case_type": "duplicate",
+    "candidate": {
+      "source_name": "Misiones Online",
+      "source_url": "https://misionesonline.net/feed/nota-noche-cine",
+      "title": "Noche de Cine",
+      "venue_name": "Centro de Conocimiento",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-08-27T19:30:00Z",
+      "latitude": -27.3667,
+      "longitude": -55.8964
+    },
+    "existing": {
+      "source_name": "Ticket Misiones",
+      "source_url": "https://ticketmisiones.com/eventos/torneo-barrial",
+      "title": "Torneo Barrial",
+      "venue_name": "Club de Educacion",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-08-27T19:30:00Z",
+      "latitude": -27.3676,
+      "longitude": -55.8965
+    },
+    "expected": {
+      "decision": "ACCEPT",
+      "score_min": 0.0,
+      "date_compatible": true,
+      "location_compatible": true
+    }
+  },
+  {
+    "id": "dup_07_same_venue_typo_review",
+    "case_type": "duplicate",
+    "candidate": {
+      "source_name": "Misiones Online",
+      "source_url": "https://misionesonline.net/feed/nota-muestra-coral",
+      "title": "Muestra Coral",
+      "venue_name": "Teatro Lirico",
+      "address": "Parque del Conocimiento, Posadas",
+      "start_at": "2026-08-24T20:00:00Z",
+      "latitude": -27.3670,
+      "longitude": -55.8962
+    },
+    "existing": {
+      "source_name": "Ticket Misiones",
+      "source_url": "https://ticketmisiones.com/eventos/muestra-coral",
+      "title": "Muestra Coral",
+      "venue_name": "Teatro Lírico",
+      "address": "Parque del Conocimiento, Posadas",
+      "start_at": "2026-08-29T20:00:00Z",
+      "latitude": -27.3670,
+      "longitude": -55.8962
+    },
+    "expected": {
+      "decision": "ACCEPT",
+      "score_min": 0.0,
+      "date_compatible": false,
+      "location_compatible": true
+    }
+  },
+  {
+    "id": "dup_08_no_duplicate_different_event",
+    "case_type": "duplicate",
+    "candidate": {
+      "source_name": "Misiones Online",
+      "source_url": "https://misionesonline.net/feed/nota-clinica-deportiva",
+      "title": "Clínica Deportiva",
+      "venue_name": "Costanera de Posadas",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-09-02T08:00:00Z",
+      "latitude": -27.3680,
+      "longitude": -55.8968
+    },
+    "existing": {
+      "source_name": "Ticket Misiones",
+      "source_url": "https://ticketmisiones.com/eventos/festival-gastronomico",
+      "title": "Festival Gastronómico",
+      "venue_name": "Costanera de Posadas",
+      "address": "Posadas, Misiones",
+      "start_at": "2026-09-02T12:00:00Z",
+      "latitude": -27.3680,
+      "longitude": -55.8968
+    },
+    "expected": {
+      "decision": "ACCEPT",
+      "score_min": 0.0,
+      "date_compatible": true,
+      "location_compatible": true
+    }
+  }
+]

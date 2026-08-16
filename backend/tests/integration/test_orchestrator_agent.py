@@ -64,6 +64,7 @@ def _llm_response(**overrides: object) -> dict:
         "confidence": 0.9,
         "title": "Festival del Litoral",
         "venue_name": "Plaza 9 de Julio",
+        "address": "Posadas, Misiones",
         "start_at": (datetime.now(UTC) + timedelta(days=2)).isoformat(),
         "latitude": -27.3671,
         "longitude": -55.8961,

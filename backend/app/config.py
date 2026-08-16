@@ -104,7 +104,36 @@ class Settings(BaseSettings):
     nominatim_base_url: str = Field(default="https://nominatim.openstreetmap.org")
     nominatim_user_agent: str = Field(default="EventRadar/0.1 (contacto pendiente)")
     nominatim_contact_email: str | None = Field(default=None)
+    nominatim_enabled: bool = Field(default=True)
     nominatim_rate_limit_seconds: float = Field(default=1.0)
+
+    # --- Geocodificación (free tier / fallback) ---
+    locationiq_enabled: bool = Field(default=False)
+    locationiq_api_key: str | None = Field(default=None)
+    locationiq_base_url: str = Field(default="https://us1.locationiq.com/v1")
+    geoapify_enabled: bool = Field(default=False)
+    geoapify_api_key: str | None = Field(default=None)
+    geoapify_base_url: str = Field(default="https://api.geoapify.com/v1")
+    geocoding_provider_order: str = Field(default="nominatim,locationiq,geoapify")
+    geocoding_timeout_seconds: float = Field(default=5.0)
+    geocoding_cache_ttl_seconds: int = Field(default=30 * 24 * 3600)
+    geocoding_negative_cache_ttl_seconds: int = Field(default=3600)
+    geocoding_max_attempts: int = Field(default=3)
+    geocoding_backoff_base_seconds: float = Field(default=0.5)
+    geocoding_backoff_jitter_seconds: float = Field(default=0.2)
+    geocoding_circuit_breaker_threshold: int = Field(default=3)
+    geocoding_circuit_breaker_reset_seconds: float = Field(default=60.0)
+    geocoding_allowed_country_code: str = Field(default="ar")
+    geocoding_catalog_path: str = Field(default="data/geocoding_catalog.json")
+
+    # --- Umbrales geográficos ---
+    geo_confidence_reject_threshold: float = Field(default=0.50)
+    geo_confidence_review_threshold: float = Field(default=0.75)
+    geo_confidence_auto_threshold: float = Field(default=0.90)
+    geo_allowed_min_latitude: float | None = Field(default=None)
+    geo_allowed_max_latitude: float | None = Field(default=None)
+    geo_allowed_min_longitude: float | None = Field(default=None)
+    geo_allowed_max_longitude: float | None = Field(default=None)
 
     # --- Google Geocoding (fallback futuro) ---
     google_geocoding_base_url: str = Field(
@@ -115,6 +144,10 @@ class Settings(BaseSettings):
 
     # --- Presupuesto y límites de IA ---
     ai_monthly_budget_usd: float = Field(default=20.0)
+
+    # --- Evaluador ---
+    evaluation_future_horizon_days: int = Field(default=365)
+    evaluation_allowed_source_hosts: str = Field(default="")
 
     # --- Flags experimentales ---
     enable_experimental_adapters: bool = Field(default=False)
@@ -146,6 +179,26 @@ class Settings(BaseSettings):
         if self.cors_allowed_origins.strip() == "*":
             return ["*"]
         return [o.strip() for o in self.cors_allowed_origins.split(",") if o.strip()]
+
+    @property
+    def geocoding_provider_order_list(self) -> list[str]:
+        return [
+            provider.strip().casefold()
+            for provider in self.geocoding_provider_order.split(",")
+            if provider.strip()
+        ]
+
+    @property
+    def has_geo_allowed_bbox(self) -> bool:
+        return all(
+            value is not None
+            for value in (
+                self.geo_allowed_min_latitude,
+                self.geo_allowed_max_latitude,
+                self.geo_allowed_min_longitude,
+                self.geo_allowed_max_longitude,
+            )
+        )
 
     @property
     def resolved_database_url(self) -> str:

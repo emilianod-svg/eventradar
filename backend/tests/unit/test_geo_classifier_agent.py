@@ -10,6 +10,7 @@ from app.agents.geo_classifier import GeoClassifierAgent
 from app.domain.entities import EventCandidate
 from app.domain.enums import ProcessingStatus
 from app.services.geocoding.base import FallbackGeocodingClient
+from app.services.geocoding.normalization import normalize_location_text
 
 
 class FakeGeocodingClient:
@@ -148,3 +149,47 @@ async def test_geo_classifier_uses_google_fallback_after_nominatim_empty() -> No
 
     assert result.processing_status == ProcessingStatus.GEOLOCATED
     assert result.evidence["geo_source"] == "google"
+
+
+@pytest.mark.asyncio
+async def test_geo_classifier_uses_catalog_before_geocoding() -> None:
+    class FailIfCalledClient:
+        async def geocode(self, *, query: str) -> dict:
+            raise AssertionError(f"geocoder no debía ser llamado: {query}")
+
+    agent = GeoClassifierAgent(geocoding_client=FailIfCalledClient())
+
+    result = await agent.execute(
+        _candidate(venue_name="Plaza 9 de Julio", address="Plaza 9 de Julio")
+    )
+
+    assert result.processing_status == ProcessingStatus.GEOLOCATED
+    assert result.geo_provider == "catalog"
+    assert result.matched_catalog_entry == "Plaza 9 de Julio"
+
+
+def test_geo_classifier_threshold_boundaries() -> None:
+    agent = GeoClassifierAgent(geocoding_client=EmptyGeocodingClient())
+
+    assert agent._decision_from_confidence(0.49) == "rejected"
+    assert agent._decision_from_confidence(0.50) == "manual_review"
+    assert agent._decision_from_confidence(0.75) == "provisional"
+    assert agent._decision_from_confidence(0.90) == "accepted"
+
+
+@pytest.mark.asyncio
+async def test_geo_classifier_rejects_posadas_outside_allowed_country() -> None:
+    agent = GeoClassifierAgent(geocoding_client=EmptyGeocodingClient())
+
+    result = await agent.execute(
+        _candidate(
+            venue_name="Encarnacion",
+            address="Encarnacion, Itapua, Paraguay",
+            title="Festival fuera de alcance",
+        )
+    )
+
+    assert result.processing_status == ProcessingStatus.REJECTED
+    assert result.geo_decision == "rejected"
+    assert result.country_code == "py"
+    assert normalize_location_text(result.geo_query or "").startswith("encarnacion")
