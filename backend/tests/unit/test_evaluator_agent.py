@@ -72,8 +72,16 @@ async def test_evaluator_rejects_missing_required_fields() -> None:
     assert result.reasons == [
         "missing_title",
         "missing_venue_name",
-        "missing_address",
     ]
+
+
+@pytest.mark.asyncio
+async def test_evaluator_accepts_event_without_address() -> None:
+    agent = EvaluatorAgent(existing_events=[])
+
+    result = await agent.execute(_candidate(address=None))
+
+    assert result.decision == EvaluationDecisionType.ACCEPT
 
 
 @pytest.mark.asyncio
