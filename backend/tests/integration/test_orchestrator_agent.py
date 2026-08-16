@@ -207,3 +207,65 @@ async def test_second_cycle_with_same_content_does_not_duplicate_events(
     second_execution = await Execution.get(id=second.execution_id)
     assert second_execution.metrics["items_collected"] == 0
     assert await Event.all().count() == 1
+
+
+class RaisingForOneItemLLMClient:
+    """Simula un item que rompe el pipeline (ej. JSON con un tipo inválido)
+    en medio de un lote, para probar el aislamiento por item (sección 6.3:
+    "Analyzing -> Partial: falla un contenido")."""
+
+    def __init__(self, failing_text: str, response: dict) -> None:
+        self._failing_text = failing_text
+        self._response = response
+
+    async def extract_event(self, *, text: str, extraction_date_iso: str) -> dict:
+        if text == self._failing_text:
+            raise ValueError("respuesta del LLM con un tipo inválido")
+        return self._response
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_one_bad_item_does_not_abort_the_rest_of_the_source(tortoise_connection) -> None:
+    source = await Source.create(name="s", base_url="https://s", adapter_type="rss")
+    good_text = "Festival del Litoral el sabado en la plaza"
+    bad_text = "Publicacion que rompe el analizador"
+    raw_items = [
+        RawContentCandidate(
+            source_id=source.id,
+            url=f"https://example.com/nota-{i}",
+            raw_text=text,
+            fetched_at=datetime.now(UTC),
+            content_hash=f"hash-{i}",
+        )
+        for i, text in enumerate([good_text, bad_text, good_text])
+    ]
+    # Dos de las 3 URLs son iguales en título/fecha/venue -> la segunda
+    # buena se detecta como MERGE de la primera, no como ACCEPT nuevo.
+    raw_items[2] = raw_items[2].model_copy(update={"url": "https://example.com/nota-2"})
+
+    rss_adapter = ConditionalRssAdapter({source.id: raw_items})
+    collector = CollectorAgent(rss_adapter=rss_adapter)
+    analyzer = AnalyzerAgent(llm_client=RaisingForOneItemLLMClient(bad_text, _llm_response()))
+    orchestrator = OrchestratorAgent(
+        collector=collector, analyzer=analyzer, geo_classifier=GeoClassifierAgent()
+    )
+
+    metadata = await orchestrator.execute()
+
+    assert metadata.status == ExecutionStatus.PARTIAL
+    execution = await Execution.get(id=metadata.execution_id)
+    assert execution.metrics["items_collected"] == 3
+    assert execution.metrics["items_failed"] == 1
+    assert execution.metrics["sources_failed"] == 0
+    assert execution.metrics["sources_processed"] == 1
+
+    exec_source = await ExecutionSource.get(execution=execution, source=source)
+    assert exec_source.status == "COMPLETED"
+    assert exec_source.items_collected == 3
+    assert exec_source.items_accepted == 2
+    assert "1 item" in (exec_source.error_message or "")
+
+    # Los 2 items buenos sí se procesaron (uno ACCEPT, el otro MERGE del
+    # mismo evento) a pesar del fallo del item del medio.
+    assert await Event.all().count() == 1

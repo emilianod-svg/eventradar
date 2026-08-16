@@ -21,10 +21,25 @@ Evaluador (`EvaluatorAgent.register_existing_event`) antes de procesar el
 siguiente candidato, para que dos fuentes distintas publicando el mismo
 evento en el mismo ciclo sí se detecten como duplicado entre sí (sección
 10.2).
+
+Aislamiento en dos niveles, como pide el diagrama de estados de la sección
+6.3 ("Observing -> Partial: falla una fuente", "Analyzing -> Partial: falla
+un contenido"):
+
+- Falla el Collector de una fuente (sitio caído, feed inválido) -> se aísla
+  a nivel fuente, la `ExecutionSource` completa queda `FAILED`.
+- Falla el Analyzer/GeoClassifier/Evaluator/Persistence en UN item -> se
+  aísla a nivel item, se cuenta y se sigue con el resto de la fuente. Es
+  necesario porque el Collector ya persistió `raw_contents` para todos los
+  items antes de este punto (idempotencia por hash, sección 13): si un
+  fallo de item abortara toda la fuente, esos items ya persistidos nunca
+  se reintentarían en un ciclo futuro (el hash ya existe, así que el
+  Collector los descartaría como "ya vistos").
 """
 
 from __future__ import annotations
 
+import logging
 import time
 from datetime import UTC, datetime
 from uuid import UUID
@@ -41,6 +56,8 @@ from app.models.source import Source
 from app.repositories.event import EventRepository
 from app.repositories.execution import ExecutionRepository
 from app.repositories.source import SourceRepository
+
+logger = logging.getLogger("eventradar.orchestrator")
 
 
 class OrchestratorAgent:
@@ -70,6 +87,7 @@ class OrchestratorAgent:
             "sources_processed": 0,
             "sources_failed": 0,
             "items_collected": 0,
+            "items_failed": 0,
             "events_accepted": 0,
             "events_merged": 0,
             "events_reviewed": 0,
@@ -95,7 +113,7 @@ class OrchestratorAgent:
 
             execution.status = (
                 ExecutionStatus.PARTIAL
-                if counters["sources_failed"] > 0
+                if counters["sources_failed"] > 0 or counters["items_failed"] > 0
                 else ExecutionStatus.COMPLETED
             )
         except Exception as exc:  # falla estructural: no un fallo aislado de fuente
@@ -141,12 +159,25 @@ class OrchestratorAgent:
         )
         items_collected = 0
         items_accepted = 0
+        items_failed = 0
         source_started = time.monotonic()
 
         try:
             raw_contents = await self._collector.execute(source_def)
-            for raw_content in raw_contents:
-                items_collected += 1
+        except Exception as exc:
+            # Sección 6.2/13: "un fallo no cancela las otras fuentes" — el
+            # Collector es la única llamada de esta función que, si falla,
+            # significa que la fuente entera no es alcanzable.
+            exec_source.status = "FAILED"
+            exec_source.error_message = str(exc)[:2000]
+            exec_source.duration_ms = (time.monotonic() - source_started) * 1000
+            await exec_source.save()
+            counters["sources_failed"] += 1
+            return
+
+        for raw_content in raw_contents:
+            items_collected += 1
+            try:
                 candidates = await self._analyzer.execute(raw_content)
                 for candidate in candidates:
                     geolocated = await self._geo_classifier.execute(candidate)
@@ -164,18 +195,28 @@ class OrchestratorAgent:
                         EvaluationDecisionType.MERGE,
                     ):
                         items_accepted += 1
-            exec_source.status = "COMPLETED"
-            counters["sources_processed"] += 1
-        except Exception as exc:
-            # Sección 6.2/13: "un fallo no cancela las otras fuentes" — se
-            # aísla acá y el ciclo sigue con la próxima fuente.
-            exec_source.status = "FAILED"
-            exec_source.error_message = str(exc)[:2000]
-            counters["sources_failed"] += 1
+            except Exception:
+                # Sección 6.3: "Analyzing -> Partial: falla un contenido".
+                # El Collector ya persistió este raw_content (idempotencia
+                # por hash, sección 13); si este fallo abortara toda la
+                # fuente, ese contenido quedaría persistido pero jamás
+                # clasificado, porque el próximo ciclo lo saltearía por
+                # hash ya visto. Se aísla al item y se sigue con el resto.
+                items_failed += 1
+                logger.warning(
+                    "orchestrator_item_failed",
+                    exc_info=True,
+                    extra={"source_id": str(source.id), "raw_content_url": raw_content.url},
+                )
 
+        exec_source.status = "COMPLETED"
+        counters["sources_processed"] += 1
         counters["items_collected"] += items_collected
+        counters["items_failed"] += items_failed
         exec_source.items_collected = items_collected
         exec_source.items_accepted = items_accepted
+        if items_failed:
+            exec_source.error_message = f"{items_failed} item(s) fallaron durante el procesamiento"
         exec_source.duration_ms = (time.monotonic() - source_started) * 1000
         await exec_source.save()
 
