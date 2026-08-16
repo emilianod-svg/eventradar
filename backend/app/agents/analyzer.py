@@ -105,7 +105,7 @@ class AnalyzerAgent:
         normalized.setdefault("classification_id", classification_id)
         normalized.setdefault("source_id", data.source_id)
         normalized.setdefault("source_url", data.url)
-        normalized.setdefault("evidence", {})
+        normalized["evidence"] = self._sanitize_evidence(normalized.get("evidence"))
         normalized.setdefault("is_event", False)
         normalized.setdefault("confidence", 0.0)
         normalized.setdefault("start_at", None)
@@ -130,6 +130,18 @@ class AnalyzerAgent:
             normalized.setdefault("published_at", data.published_at.astimezone(UTC).isoformat())
 
         return normalized
+
+    def _sanitize_evidence(self, value: object) -> dict[str, str]:
+        """Sección 8.5, paso 6 ("validar tipos"): el LLM real a veces
+        devuelve `evidence` con valores `null` para campos que no encontró
+        sustento textual (en vez de omitir la clave, como pide el prompt) —
+        `EventCandidate.evidence` es `dict[str, str]` estricto, así que se
+        descartan las entradas no-string acá en vez de dejar que
+        `model_validate` rompa el pipeline entero por un detalle cosmético.
+        """
+        if not isinstance(value, dict):
+            return {}
+        return {key: item for key, item in value.items() if isinstance(item, str)}
 
     def _extract_title(self, raw_text: str) -> str | None:
         first_line = next((line.strip() for line in raw_text.splitlines() if line.strip()), "")
