@@ -43,7 +43,22 @@ class OllamaLLMClient:
         last_error: Exception | None = None
         for attempt in range(1, attempts + 1):
             started_at = time.monotonic()
-            data = await self._call_ollama(payload)
+            try:
+                data = await self._call_ollama(payload)
+            except ExternalServiceNotConfiguredError as exc:
+                last_error = exc
+                latency_ms = (time.monotonic() - started_at) * 1000
+                logger.warning(
+                    "llm_extract_call_failed",
+                    extra={
+                        "model": self._model,
+                        "prompt_version": ANALYZER_PROMPT_VERSION,
+                        "attempt": attempt,
+                        "latency_ms": round(latency_ms, 1),
+                        "error": str(exc),
+                    },
+                )
+                continue
             latency_ms = (time.monotonic() - started_at) * 1000
             raw_output = data.get("response", "")
 
@@ -60,6 +75,9 @@ class OllamaLLMClient:
                         "prompt_version": ANALYZER_PROMPT_VERSION,
                         "attempt": attempt,
                         "latency_ms": round(latency_ms, 1),
+                        "raw_output_preview": (
+                            raw_output[:500] if isinstance(raw_output, str) else repr(raw_output)
+                        ),
                     },
                 )
                 continue

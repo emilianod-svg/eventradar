@@ -153,7 +153,7 @@ async def test_review_creates_review_item_without_event(tortoise_connection) -> 
     candidate = _candidate(source, classification.id, confidence=0.6)
     result = EvaluationResult(
         decision=EvaluationDecisionType.REVIEW,
-        reasons=["low_confidence_requires_review"],
+        reasons=["low_extraction_confidence"],
         score=0.6,
         event=candidate,
     )
@@ -164,7 +164,7 @@ async def test_review_creates_review_item_without_event(tortoise_connection) -> 
     assert await Event.all().count() == 0
     review_items = await ReviewItem.filter(classification_id=classification.id)
     assert len(review_items) == 1
-    assert review_items[0].reason == "low_confidence_requires_review"
+    assert review_items[0].reason == "low_extraction_confidence"
 
 
 @pytest.mark.integration

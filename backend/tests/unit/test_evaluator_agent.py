@@ -59,7 +59,8 @@ async def test_evaluator_reviews_low_confidence_events() -> None:
     )
 
     assert result.decision == EvaluationDecisionType.REVIEW
-    assert "low_confidence_requires_review" in result.reasons
+    assert "low_extraction_confidence" in result.reasons
+    assert "low_geo_confidence" in result.reasons
 
 
 @pytest.mark.asyncio
