@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from math import sqrt
 
 import httpx
 
@@ -31,6 +32,25 @@ def _string_or_none(value: object) -> str | None:
     if isinstance(value, str) and value:
         return value
     return None
+
+
+def _haversine_m(
+    latitude_a: float,
+    longitude_a: float,
+    latitude_b: float,
+    longitude_b: float,
+) -> float:
+    from math import asin, cos, radians, sin
+
+    radius_m = 6_371_000.0
+    lat1 = radians(latitude_a)
+    lon1 = radians(longitude_a)
+    lat2 = radians(latitude_b)
+    lon2 = radians(longitude_b)
+    delta_lat = lat2 - lat1
+    delta_lon = lon2 - lon1
+    hav = sin(delta_lat / 2) ** 2 + cos(lat1) * cos(lat2) * sin(delta_lon / 2) ** 2
+    return 2 * radius_m * asin(sqrt(hav))
 
 
 class _HttpGeocodingProvider:
@@ -399,8 +419,27 @@ class GeoapifyGeocodingProvider(_HttpGeocodingProvider):
 
 
 class GeocodingProviderChain:
-    def __init__(self, providers: Sequence[GeocodingProvider]) -> None:
+    def __init__(
+        self,
+        providers: Sequence[GeocodingProvider],
+        *,
+        consensus_min_providers: int | None = None,
+        consensus_max_distance_meters: float | None = None,
+    ) -> None:
+        from app.config import get_settings
+
+        settings = get_settings()
         self.providers = list(providers)
+        self._consensus_min_providers = (
+            settings.geocoding_consensus_min_providers
+            if consensus_min_providers is None
+            else consensus_min_providers
+        )
+        self._consensus_max_distance_meters = (
+            settings.geocoding_consensus_max_distance_meters
+            if consensus_max_distance_meters is None
+            else consensus_max_distance_meters
+        )
 
     async def search(
         self,
@@ -409,8 +448,150 @@ class GeocodingProviderChain:
         country_code: str | None = None,
         limit: int = 5,
     ) -> list[GeocodingCandidate]:
+        collected: list[GeocodingCandidate] = []
         for provider in self.providers:
             candidates = await provider.search(query, country_code=country_code, limit=limit)
             if candidates:
-                return candidates
-        return []
+                collected.extend(candidates)
+
+        if not collected:
+            return []
+
+        provider_names = {candidate.provider for candidate in collected}
+        if len(provider_names) <= 1:
+            return collected
+
+        clusters = self._cluster_candidates(collected)
+        representatives = [self._represent_cluster(cluster, query=query) for cluster in clusters]
+        representatives.sort(key=self._cluster_sort_key, reverse=True)
+
+        best = representatives[0]
+        if (
+            self._cluster_provider_count(best) >= self._consensus_min_providers
+            and self._cluster_max_distance_m(best) <= self._consensus_max_distance_meters
+        ):
+            return [best]
+
+        return representatives
+
+    def _cluster_candidates(
+        self, candidates: Sequence[GeocodingCandidate]
+    ) -> list[list[GeocodingCandidate]]:
+        ordered = sorted(candidates, key=self._candidate_score, reverse=True)
+        clusters: list[list[GeocodingCandidate]] = []
+        for candidate in ordered:
+            placed = False
+            for cluster in clusters:
+                if any(
+                    _haversine_m(
+                        candidate.latitude,
+                        candidate.longitude,
+                        member.latitude,
+                        member.longitude,
+                    )
+                    <= self._consensus_max_distance_meters
+                    for member in cluster
+                ):
+                    cluster.append(candidate)
+                    placed = True
+                    break
+            if not placed:
+                clusters.append([candidate])
+        return clusters
+
+    def _represent_cluster(
+        self,
+        cluster: list[GeocodingCandidate],
+        *,
+        query: str,
+    ) -> GeocodingCandidate:
+        best = max(cluster, key=self._candidate_score)
+        scores = [self._candidate_score(candidate) for candidate in cluster]
+        weights = [score if score > 0.0 else 1.0 for score in scores]
+        weight_total = sum(weights) or float(len(cluster))
+        latitude = (
+            sum(
+                candidate.latitude * weight
+                for candidate, weight in zip(cluster, weights, strict=False)
+            )
+            / weight_total
+        )
+        longitude = (
+            sum(
+                candidate.longitude * weight
+                for candidate, weight in zip(cluster, weights, strict=False)
+            )
+            / weight_total
+        )
+
+        cluster_metadata = {
+            "geo_cluster_provider_count": str(len({candidate.provider for candidate in cluster})),
+            "geo_cluster_candidate_count": str(len(cluster)),
+            "geo_cluster_providers": ",".join(
+                sorted({candidate.provider for candidate in cluster})
+            ),
+            "geo_cluster_min_latitude": f"{min(candidate.latitude for candidate in cluster):.6f}",
+            "geo_cluster_max_latitude": f"{max(candidate.latitude for candidate in cluster):.6f}",
+            "geo_cluster_min_longitude": f"{min(candidate.longitude for candidate in cluster):.6f}",
+            "geo_cluster_max_longitude": f"{max(candidate.longitude for candidate in cluster):.6f}",
+            "geo_cluster_max_distance_m": f"{self._cluster_max_distance(cluster):.1f}",
+            "geo_cluster_consensus": "true"
+            if len({candidate.provider for candidate in cluster}) >= self._consensus_min_providers
+            and self._cluster_max_distance(cluster) <= self._consensus_max_distance_meters
+            else "false",
+        }
+
+        if cluster_metadata["geo_cluster_consensus"] == "true":
+            return best.model_copy(
+                update={
+                    "provider": "consensus",
+                    "display_name": best.display_name,
+                    "normalized_name": best.normalized_name,
+                    "latitude": latitude,
+                    "longitude": longitude,
+                    "precision": "consensus",
+                    "provider_confidence": max(scores),
+                    "provider_importance": max(scores),
+                    "query": query,
+                    "metadata": {**best.metadata, **cluster_metadata},
+                }
+            )
+
+        return best.model_copy(
+            update={"metadata": {**best.metadata, **cluster_metadata}, "query": query}
+        )
+
+    def _candidate_score(self, candidate: GeocodingCandidate) -> float:
+        return candidate.provider_confidence or candidate.provider_importance or 0.0
+
+    def _cluster_max_distance(self, cluster: Sequence[GeocodingCandidate]) -> float:
+        if len(cluster) < 2:
+            return 0.0
+        max_distance = 0.0
+        for index, left in enumerate(cluster):
+            for right in cluster[index + 1 :]:
+                max_distance = max(
+                    max_distance,
+                    _haversine_m(left.latitude, left.longitude, right.latitude, right.longitude),
+                )
+        return max_distance
+
+    def _cluster_provider_count(self, candidate: GeocodingCandidate) -> int:
+        value = candidate.metadata.get("geo_cluster_provider_count")
+        return int(value) if isinstance(value, str) and value.isdigit() else 1
+
+    def _cluster_max_distance_m(self, candidate: GeocodingCandidate) -> float:
+        value = candidate.metadata.get("geo_cluster_max_distance_m")
+        if isinstance(value, str):
+            try:
+                return float(value)
+            except ValueError:
+                return 0.0
+        return 0.0
+
+    def _cluster_sort_key(self, candidate: GeocodingCandidate) -> tuple[float, float, float]:
+        return (
+            float(self._cluster_provider_count(candidate)),
+            self._candidate_score(candidate),
+            -self._cluster_max_distance_m(candidate),
+        )
