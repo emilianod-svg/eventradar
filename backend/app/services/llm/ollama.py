@@ -125,6 +125,7 @@ class OllamaLLMClient:
                         "raw_output_preview": (
                             raw_output[:500] if isinstance(raw_output, str) else repr(raw_output)
                         ),
+                        **self._response_diagnostics(data),
                     },
                 )
                 continue
@@ -136,8 +137,7 @@ class OllamaLLMClient:
                     "prompt_version": ANALYZER_PROMPT_VERSION,
                     "attempt": attempt,
                     "latency_ms": round(latency_ms, 1),
-                    "eval_count": data.get("eval_count"),
-                    "prompt_eval_count": data.get("prompt_eval_count"),
+                    **self._response_diagnostics(data),
                 },
             )
             return parsed
@@ -164,6 +164,29 @@ class OllamaLLMClient:
                 f"No se pudo contactar Ollama en {self._base_url}."
             ) from exc
         return response.json()
+
+    def _response_diagnostics(self, data: dict[str, Any]) -> dict[str, Any]:
+        """Campos del sobre de `/api/generate` (más allá de `response`) útiles
+        para diagnosticar respuestas vacías o JSON truncado: `done_reason`
+        distingue un corte por límite de tokens (`"length"`) de un cierre
+        normal (`"stop"`), y `thinking_chars` expone cuánto del presupuesto
+        de tokens se fue en razonamiento en vez de en la respuesta final,
+        algo típico de modelos "thinking" como minimax-m3.
+        """
+        total_duration_ns = data.get("total_duration")
+        thinking = data.get("thinking")
+        return {
+            "done": data.get("done"),
+            "done_reason": data.get("done_reason"),
+            "total_duration_ms": (
+                round(total_duration_ns / 1_000_000, 1)
+                if isinstance(total_duration_ns, int | float)
+                else None
+            ),
+            "eval_count": data.get("eval_count"),
+            "prompt_eval_count": data.get("prompt_eval_count"),
+            "thinking_chars": len(thinking) if isinstance(thinking, str) else None,
+        }
 
     def _parse_json_object(self, raw_output: str) -> dict[str, Any]:
         cleaned = raw_output.strip()
