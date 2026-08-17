@@ -157,6 +157,7 @@ class PersistenceAgent:
             update={
                 "decision": EvaluationDecisionType.REVIEW,
                 "reasons": list(data.reasons) + [reason],
+                "duplicate_of": None,
             }
         )
 
