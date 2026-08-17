@@ -217,6 +217,39 @@ async def test_evaluator_accepts_moderate_similarity_as_non_duplicate() -> None:
 
 
 @pytest.mark.asyncio
+async def test_duplicate_candidate_threshold_is_configurable() -> None:
+    """duplicate_candidate_threshold gatea `_is_duplicate_candidate` (title
+    similarity ~0.43 acá, sin compatibilidad de fecha ni ubicación). Con el
+    default (0.50) no es candidato -> ACCEPT. Bajando el umbral, sí lo es."""
+    existing = {
+        "id": uuid4(),
+        "title": "Noche de Salsa",
+        "venue_name": "Plaza 9 de Julio",
+        "address": "Posadas, Misiones",
+        "start_at": datetime.now(UTC) + timedelta(days=10),
+    }
+    candidate = _candidate(
+        title="Festival del Litoral", venue_name="Anfiteatro Manuel Antonio Ramirez"
+    )
+    matcher = CountingDuplicateMatcher(score_value=0.95)
+
+    default_agent = EvaluatorAgent(existing_events=[existing], duplicate_matcher=matcher)
+    default_result = await default_agent.execute(candidate)
+    assert default_result.decision == EvaluationDecisionType.ACCEPT
+    assert len(matcher.calls) == 0
+
+    lenient_agent = EvaluatorAgent(
+        existing_events=[existing],
+        duplicate_matcher=matcher,
+        duplicate_candidate_threshold=0.30,
+    )
+    lenient_result = await lenient_agent.execute(candidate)
+    assert lenient_result.decision == EvaluationDecisionType.REVIEW
+    assert lenient_result.duplicate_of == existing["id"]
+    assert len(matcher.calls) == 1
+
+
+@pytest.mark.asyncio
 async def test_evaluator_rejects_events_outside_radius() -> None:
     agent = EvaluatorAgent(
         existing_events=[],

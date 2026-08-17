@@ -22,12 +22,6 @@ from rapidfuzz import fuzz
 
 from app.agents.geo_classifier import GeoClassificationResult
 from app.config import get_settings
-from app.domain.decisions import (
-    CONFIDENCE_ACCEPT_THRESHOLD,
-    CONFIDENCE_REVIEW_THRESHOLD,
-    DUPLICATE_AUTO_MERGE_THRESHOLD,
-    DUPLICATE_REVIEW_THRESHOLD,
-)
 from app.domain.entities import EvaluationResult, EventCandidate
 from app.domain.enums import EvaluationDecisionType, ProcessingStatus
 from app.models.event import Event
@@ -71,6 +65,11 @@ class EvaluatorAgent:
         source_url_checker: Callable[[str], Any] | None = None,
         allowed_source_hosts: Sequence[str] | None = None,
         max_future_days: int | None = None,
+        confidence_accept_threshold: float | None = None,
+        confidence_review_threshold: float | None = None,
+        duplicate_candidate_threshold: float | None = None,
+        duplicate_review_threshold: float | None = None,
+        duplicate_auto_merge_threshold: float | None = None,
     ) -> None:
         settings = get_settings()
         self._existing_events = list(existing_events or [])
@@ -93,6 +92,31 @@ class EvaluatorAgent:
         }
         self._max_future_days = (
             settings.evaluation_future_horizon_days if max_future_days is None else max_future_days
+        )
+        self._confidence_accept_threshold = (
+            settings.confidence_accept_threshold
+            if confidence_accept_threshold is None
+            else confidence_accept_threshold
+        )
+        self._confidence_review_threshold = (
+            settings.confidence_review_threshold
+            if confidence_review_threshold is None
+            else confidence_review_threshold
+        )
+        self._duplicate_candidate_threshold = (
+            settings.duplicate_candidate_threshold
+            if duplicate_candidate_threshold is None
+            else duplicate_candidate_threshold
+        )
+        self._duplicate_review_threshold = (
+            settings.duplicate_review_threshold
+            if duplicate_review_threshold is None
+            else duplicate_review_threshold
+        )
+        self._duplicate_auto_merge_threshold = (
+            settings.duplicate_auto_merge_threshold
+            if duplicate_auto_merge_threshold is None
+            else duplicate_auto_merge_threshold
         )
 
     def register_existing_event(self, event: ExistingEventLike) -> None:
@@ -146,7 +170,7 @@ class EvaluatorAgent:
         if not self._is_required_text_present(data.venue_name):
             reasons.append("missing_venue_name")
 
-        if data.confidence < CONFIDENCE_REVIEW_THRESHOLD:
+        if data.confidence < self._confidence_review_threshold:
             return EvaluationResult(
                 decision=EvaluationDecisionType.REJECT,
                 reasons=["confidence_below_minimum"],
@@ -196,7 +220,7 @@ class EvaluatorAgent:
                     event=data,
                 )
 
-        if data.confidence < CONFIDENCE_ACCEPT_THRESHOLD:
+        if data.confidence < self._confidence_accept_threshold:
             reasons.append("low_extraction_confidence")
         if data.processing_status == ProcessingStatus.PENDING_REVIEW:
             reasons.append("low_geo_confidence")
@@ -205,7 +229,7 @@ class EvaluatorAgent:
         if duplicate is not None:
             score = duplicate["score"]
             if (
-                score >= DUPLICATE_AUTO_MERGE_THRESHOLD
+                score >= self._duplicate_auto_merge_threshold
                 and duplicate["date_compatible"]
                 and duplicate["location_compatible"]
             ):
@@ -216,7 +240,7 @@ class EvaluatorAgent:
                     score=score,
                     event=data,
                 )
-            if score >= DUPLICATE_REVIEW_THRESHOLD:
+            if score >= self._duplicate_review_threshold:
                 return EvaluationResult(
                     decision=EvaluationDecisionType.REVIEW,
                     reasons=reasons + duplicate["reasons"],
@@ -444,7 +468,8 @@ class EvaluatorAgent:
         return (
             self._date_compatible(candidate_payload, existing)
             or self._location_compatible(candidate_payload, existing)
-            or self._title_similarity(candidate_payload, existing) >= 0.50
+            or self._title_similarity(candidate_payload, existing)
+            >= self._duplicate_candidate_threshold
         )
 
     def _candidate_payload(self, value: ExistingEventLike) -> dict[str, Any]:

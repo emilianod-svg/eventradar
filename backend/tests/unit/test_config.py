@@ -60,3 +60,57 @@ def test_source_bootstrap_defaults_are_enabled() -> None:
     assert settings.source_discovery_enabled is False
     assert settings.source_request_timeout_seconds == 10.0
     assert settings.source_max_redirects == 3
+
+
+def test_decision_thresholds_default_to_plan_values() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.confidence_review_threshold == 0.50
+    assert settings.confidence_accept_threshold == 0.70
+    assert settings.duplicate_candidate_threshold == 0.50
+    assert settings.duplicate_review_threshold == 0.75
+    assert settings.duplicate_auto_merge_threshold == 0.90
+    assert settings.geo_catalog_match_threshold == 0.85
+
+
+def test_decision_thresholds_are_configurable_via_env(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("CONFIDENCE_REVIEW_THRESHOLD", "0.40")
+    monkeypatch.setenv("CONFIDENCE_ACCEPT_THRESHOLD", "0.60")
+    monkeypatch.setenv("DUPLICATE_AUTO_MERGE_THRESHOLD", "0.95")
+
+    settings = Settings(_env_file=None)
+
+    assert settings.confidence_review_threshold == 0.40
+    assert settings.confidence_accept_threshold == 0.60
+    assert settings.duplicate_auto_merge_threshold == 0.95
+
+
+def test_confidence_review_above_accept_is_rejected() -> None:
+    with pytest.raises(ValueError):
+        Settings(
+            _env_file=None,
+            confidence_review_threshold=0.80,
+            confidence_accept_threshold=0.70,
+        )
+
+
+def test_duplicate_thresholds_out_of_order_are_rejected() -> None:
+    with pytest.raises(ValueError):
+        Settings(
+            _env_file=None,
+            duplicate_candidate_threshold=0.80,
+            duplicate_review_threshold=0.75,
+        )
+    with pytest.raises(ValueError):
+        Settings(
+            _env_file=None,
+            duplicate_review_threshold=0.95,
+            duplicate_auto_merge_threshold=0.90,
+        )
+
+
+def test_decision_thresholds_out_of_range_are_rejected() -> None:
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, confidence_accept_threshold=1.5)
+    with pytest.raises(ValueError):
+        Settings(_env_file=None, duplicate_review_threshold=-0.1)
