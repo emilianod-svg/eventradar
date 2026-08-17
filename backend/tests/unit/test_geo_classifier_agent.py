@@ -11,6 +11,7 @@ from app.config import get_settings
 from app.domain.entities import EventCandidate
 from app.domain.enums import ProcessingStatus
 from app.services.geocoding.base import FallbackGeocodingClient
+from app.services.geocoding.catalog import LocationCatalog
 from app.services.geocoding.normalization import normalize_location_text
 
 
@@ -69,18 +70,23 @@ async def test_geo_classifier_uses_explicit_coordinates_before_geocoding() -> No
 async def test_geo_classifier_resolves_address_query_first() -> None:
     client = FakeGeocodingClient(
         {
+            "Parque": {
+                "latitude": -27.3671,
+                "longitude": -55.8961,
+                "precision": "rooftop",
+            },
             "Sarmiento 123": {
                 "latitude": -27.3671,
                 "longitude": -55.8961,
                 "precision": "rooftop",
-            }
+            },
         }
     )
     agent = GeoClassifierAgent(geocoding_client=client)
 
     result = await agent.execute(_candidate())
 
-    assert client.calls[0] == "Sarmiento 123"
+    assert client.calls[0] == "Parque"
     assert result.processing_status == ProcessingStatus.GEOLOCATED
     assert result.geo_precision == "rooftop"
 
@@ -89,12 +95,18 @@ async def test_geo_classifier_resolves_address_query_first() -> None:
 async def test_geo_classifier_marks_ambiguous_matches_for_review() -> None:
     client = FakeGeocodingClient(
         {
+            "Parque": {
+                "candidates": [
+                    {"latitude": -27.3671, "longitude": -55.8961, "score": 0.88},
+                    {"latitude": -27.368, "longitude": -55.897, "score": 0.82},
+                ]
+            },
             "Sarmiento 123": {
                 "candidates": [
                     {"latitude": -27.3671, "longitude": -55.8961, "score": 0.88},
                     {"latitude": -27.368, "longitude": -55.897, "score": 0.82},
                 ]
-            }
+            },
         }
     )
     agent = GeoClassifierAgent(geocoding_client=client)
@@ -102,18 +114,23 @@ async def test_geo_classifier_marks_ambiguous_matches_for_review() -> None:
     result = await agent.execute(_candidate())
 
     assert result.processing_status == ProcessingStatus.PENDING_REVIEW
-    assert result.geo_query == "Sarmiento 123"
+    assert result.geo_query == "Parque"
 
 
 @pytest.mark.asyncio
 async def test_geo_classifier_rejects_results_outside_radius() -> None:
     client = FakeGeocodingClient(
         {
+            "Parque": {
+                "latitude": -26.0,
+                "longitude": -54.0,
+                "precision": "city",
+            },
             "Sarmiento 123": {
                 "latitude": -26.0,
                 "longitude": -54.0,
                 "precision": "city",
-            }
+            },
         }
     )
     agent = GeoClassifierAgent(
@@ -134,12 +151,18 @@ async def test_geo_classifier_rejects_results_outside_radius() -> None:
 async def test_geo_classifier_uses_google_fallback_after_nominatim_empty() -> None:
     fallback = FakeGeocodingClient(
         {
+            "Parque": {
+                "latitude": -27.3671,
+                "longitude": -55.8961,
+                "precision": "rooftop",
+                "provider": "google",
+            },
             "Sarmiento 123": {
                 "latitude": -27.3671,
                 "longitude": -55.8961,
                 "precision": "rooftop",
                 "provider": "google",
-            }
+            },
         }
     )
     agent = GeoClassifierAgent(
@@ -167,6 +190,34 @@ async def test_geo_classifier_uses_catalog_before_geocoding() -> None:
     assert result.processing_status == ProcessingStatus.GEOLOCATED
     assert result.geo_provider == "catalog"
     assert result.matched_catalog_entry == "Plaza 9 de Julio"
+
+
+@pytest.mark.asyncio
+async def test_geo_classifier_prefers_venue_query_before_city_address() -> None:
+    class RecordingClient:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def geocode(self, *, query: str) -> dict:
+            self.calls.append(query)
+            return {
+                "latitude": -27.3944879,
+                "longitude": -55.8967998,
+                "precision": "rooftop",
+                "provider": "locationiq",
+            }
+
+    client = RecordingClient()
+    agent = GeoClassifierAgent(geocoding_client=client, catalog=LocationCatalog([]))
+
+    await agent.execute(
+        _candidate(
+            venue_name="Salon Test 123",
+            address="Posadas, Misiones",
+        )
+    )
+
+    assert client.calls[0].startswith("Salon Test 123")
 
 
 def test_geo_classifier_threshold_boundaries() -> None:

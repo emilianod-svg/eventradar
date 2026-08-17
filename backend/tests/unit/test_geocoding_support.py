@@ -33,6 +33,16 @@ def test_location_catalog_loads_default_catalog() -> None:
     assert match.exact is True
 
 
+def test_location_catalog_knows_finito_gehrmann() -> None:
+    catalog = LocationCatalog.default()
+    match = catalog.search("Polideportivo Finito Gehrmann")
+
+    assert match is not None
+    assert match.entry.name == "Polideportivo Municipal Ernesto Finito Gehrmann"
+    assert match.entry.latitude == -27.3944879
+    assert match.entry.longitude == -55.8967998
+
+
 def test_locationiq_uses_json_format() -> None:
     provider = LocationIQGeocodingProvider(
         base_url="https://us1.locationiq.com/v1",
@@ -140,6 +150,101 @@ async def test_provider_chain_returns_first_non_empty_result() -> None:
 
     assert result
     assert result[0].provider == "catalog"
+
+
+@pytest.mark.asyncio
+async def test_provider_chain_merges_nearby_results_into_consensus() -> None:
+    class LocationIQProvider:
+        async def search(self, query: str, *, country_code: str | None = None, limit: int = 5):
+            return [
+                GeocodingCandidate(
+                    provider="locationiq",
+                    display_name="Parque del Conocimiento",
+                    normalized_name="parque del conocimiento",
+                    latitude=-27.39518,
+                    longitude=-55.963405,
+                    country_code="ar",
+                    state="Misiones",
+                    city="Posadas",
+                    provider_confidence=0.2,
+                )
+            ]
+
+    class GeoapifyProvider:
+        async def search(self, query: str, *, country_code: str | None = None, limit: int = 5):
+            return [
+                GeocodingCandidate(
+                    provider="geoapify",
+                    display_name="Parque del Conocimiento",
+                    normalized_name="parque del conocimiento",
+                    latitude=-27.3953863,
+                    longitude=-55.9639364,
+                    country_code="ar",
+                    state="Misiones",
+                    city="Posadas",
+                    provider_confidence=0.81,
+                )
+            ]
+
+    chain = GeocodingProviderChain(
+        [LocationIQProvider(), GeoapifyProvider()],
+        consensus_min_providers=2,
+        consensus_max_distance_meters=300.0,
+    )
+
+    result = await chain.search("Parque del Conocimiento", country_code="ar")
+
+    assert len(result) == 1
+    assert result[0].provider == "consensus"
+    assert result[0].metadata["geo_cluster_consensus"] == "true"
+    assert result[0].metadata["geo_cluster_provider_count"] == "2"
+    assert result[0].metadata["geo_cluster_max_distance_m"] != "0.0"
+
+
+@pytest.mark.asyncio
+async def test_provider_chain_keeps_separate_results_when_too_far_apart() -> None:
+    class FirstProvider:
+        async def search(self, query: str, *, country_code: str | None = None, limit: int = 5):
+            return [
+                GeocodingCandidate(
+                    provider="locationiq",
+                    display_name="Posadas",
+                    normalized_name="posadas",
+                    latitude=-27.39518,
+                    longitude=-55.963405,
+                    country_code="ar",
+                    state="Misiones",
+                    city="Posadas",
+                    provider_confidence=0.7,
+                )
+            ]
+
+    class SecondProvider:
+        async def search(self, query: str, *, country_code: str | None = None, limit: int = 5):
+            return [
+                GeocodingCandidate(
+                    provider="geoapify",
+                    display_name="Oberá",
+                    normalized_name="obera",
+                    latitude=-27.488,
+                    longitude=-55.119,
+                    country_code="ar",
+                    state="Misiones",
+                    city="Oberá",
+                    provider_confidence=0.8,
+                )
+            ]
+
+    chain = GeocodingProviderChain(
+        [FirstProvider(), SecondProvider()],
+        consensus_min_providers=2,
+        consensus_max_distance_meters=300.0,
+    )
+
+    result = await chain.search("evento", country_code="ar")
+
+    assert len(result) == 2
+    assert {candidate.provider for candidate in result} == {"locationiq", "geoapify"}
 
 
 @pytest.mark.asyncio
