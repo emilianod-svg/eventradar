@@ -4,6 +4,14 @@
 
 const API_BASE_URL = import.meta.env.VITE_API_URL as string | undefined;
 
+function resolveBaseUrl(): string {
+  if (import.meta.env.DEV) {
+    return "";
+  }
+
+  return getApiBaseUrl();
+}
+
 export class ApiConfigurationError extends Error {}
 
 export function getApiBaseUrl(): string {
@@ -16,7 +24,7 @@ export function getApiBaseUrl(): string {
 }
 
 export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
-  const base = getApiBaseUrl();
+  const base = resolveBaseUrl();
   const response = await fetch(`${base}${path}`, { signal });
   if (!response.ok) {
     let message = `Error ${response.status} al consultar ${path}`;

@@ -24,6 +24,8 @@ import time
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
+from pydantic import ValidationError
+
 from app.config import get_settings
 from app.domain.decisions import CONFIDENCE_ACCEPT_THRESHOLD, CONFIDENCE_REVIEW_THRESHOLD
 from app.domain.entities import EventCandidate, RawContentCandidate
@@ -31,8 +33,6 @@ from app.domain.enums import ProcessingStatus
 from app.models.classification import Classification
 from app.services.llm.base import LLMClient, get_llm_client
 from app.services.llm.prompts import ANALYZER_PROMPT_VERSION
-from pydantic import ValidationError
-
 
 logger = logging.getLogger(__name__)
 
@@ -128,7 +128,7 @@ class AnalyzerAgent:
             if bool(event.get("is_event")):
                 is_event = True
             confidence = event.get("confidence")
-            if isinstance(confidence, (int, float)):
+            if isinstance(confidence, int | float):
                 max_confidence = max(max_confidence, float(confidence))
         return is_event, max_confidence
 

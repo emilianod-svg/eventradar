@@ -132,7 +132,9 @@ class PersistenceAgent:
                 )
             return data
 
-        if data.decision == EvaluationDecisionType.ACCEPT and not self._can_create_event(data.event):
+        if data.decision == EvaluationDecisionType.ACCEPT and not self._can_create_event(
+            data.event
+        ):
             return self._downgrade_to_review(
                 data,
                 "accept_without_persistable_fields",

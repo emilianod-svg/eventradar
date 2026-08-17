@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from typing import Any
 
@@ -14,6 +15,12 @@ from app.domain.errors import ExternalServiceNotConfiguredError
 from app.services.llm.prompts import ANALYZER_PROMPT_VERSION, build_analyzer_prompt
 
 logger = logging.getLogger(__name__)
+
+# El modelo a veces envuelve la respuesta en un fence de markdown con
+# identificador de lenguaje (```json ... ```). `str.strip("`")` solo saca
+# los backticks y deja la palabra "json" pegada al JSON, lo que hacía
+# fallar `json.loads` en la posición 0 aunque el JSON en sí fuera válido.
+_CODE_FENCE_PATTERN = re.compile(r"^```[^\n`]*\n?|\n?```\s*$")
 
 
 class OllamaLLMClient:
@@ -44,7 +51,22 @@ class OllamaLLMClient:
         last_error: Exception | None = None
         for attempt in range(1, attempts + 1):
             started_at = time.monotonic()
-            data = await self._call_ollama(payload)
+            try:
+                data = await self._call_ollama(payload)
+            except ExternalServiceNotConfiguredError as exc:
+                last_error = exc
+                latency_ms = (time.monotonic() - started_at) * 1000
+                logger.warning(
+                    "llm_extract_call_failed",
+                    extra={
+                        "model": self._model,
+                        "prompt_version": ANALYZER_PROMPT_VERSION,
+                        "attempt": attempt,
+                        "latency_ms": round(latency_ms, 1),
+                        "error": str(exc),
+                    },
+                )
+                continue
             latency_ms = (time.monotonic() - started_at) * 1000
             raw_output = data.get("response", "")
 
@@ -61,8 +83,9 @@ class OllamaLLMClient:
                         "prompt_version": ANALYZER_PROMPT_VERSION,
                         "attempt": attempt,
                         "latency_ms": round(latency_ms, 1),
-                        "raw_output_len": len(raw_output) if isinstance(raw_output, str) else None,
-                        "raw_output_preview": self._preview_output(raw_output),
+                        "raw_output_preview": (
+                            raw_output[:500] if isinstance(raw_output, str) else repr(raw_output)
+                        ),
                     },
                 )
                 continue
@@ -99,54 +122,13 @@ class OllamaLLMClient:
         return response.json()
 
     def _parse_json_object(self, raw_output: str) -> dict[str, Any]:
-        cleaned = self._strip_code_fences(raw_output).strip()
-        candidates = [cleaned]
-        brace_index = cleaned.find("{")
-        if brace_index > 0:
-            candidates.append(cleaned[brace_index:])
-
-        decoder = json.JSONDecoder()
-        for candidate in candidates:
-            parsed = self._decode_json_object(candidate, decoder)
-            if parsed is not None:
-                return parsed
-
-        raise ValueError("La respuesta de Ollama no es JSON válido.")
-
-    def _decode_json_object(
-        self,
-        candidate: str,
-        decoder: json.JSONDecoder,
-    ) -> dict[str, Any] | None:
+        cleaned = raw_output.strip()
+        if cleaned.startswith("```"):
+            cleaned = _CODE_FENCE_PATTERN.sub("", cleaned).strip()
         try:
-            parsed, _ = decoder.raw_decode(candidate)
-        except json.JSONDecodeError:
-            return None
-
-        if isinstance(parsed, dict):
-            return parsed
-        if isinstance(parsed, str):
-            nested = parsed.strip()
-            if nested.startswith("{"):
-                try:
-                    nested_parsed = json.loads(nested)
-                except json.JSONDecodeError:
-                    return None
-                if isinstance(nested_parsed, dict):
-                    return nested_parsed
-        return None
-
-    def _strip_code_fences(self, raw_output: str) -> str:
-        text = raw_output.strip()
-        if not text.startswith("```"):
-            return text
-
-        text = text[3:]
-        if text.startswith("json"):
-            text = text[4:]
-        return text.strip().strip("`").strip()
-
-    def _preview_output(self, raw_output: object, limit: int = 240) -> str:
-        if not isinstance(raw_output, str):
-            return repr(raw_output)[:limit]
-        return raw_output.strip()[:limit]
+            parsed = json.loads(cleaned)
+        except json.JSONDecodeError as exc:
+            raise ValueError("La respuesta de Ollama no es JSON válido.") from exc
+        if not isinstance(parsed, dict):
+            raise ValueError("La respuesta de Ollama debe ser un objeto JSON.")
+        return parsed

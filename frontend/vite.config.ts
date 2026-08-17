@@ -9,5 +9,10 @@ export default defineConfig({
   envPrefix: "VITE_",
   server: {
     port: 5173,
+    proxy: {
+      "/api": "http://localhost:8000",
+      "/health": "http://localhost:8000",
+      "/ready": "http://localhost:8000",
+    },
   },
 });
