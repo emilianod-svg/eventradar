@@ -22,6 +22,7 @@ import logging
 import re
 import time
 from datetime import UTC, datetime, timedelta
+from typing import Any
 from uuid import UUID
 
 from pydantic import ValidationError
@@ -116,10 +117,14 @@ class AnalyzerAgent:
                 start_at = start_at.replace(tzinfo=UTC)
             if start_at is not None and start_at < data.fetched_at:
                 continue
+            # El `start_at` normalizado arriba (tz-aware) debe volver al
+            # candidato: si se descarta acá, evaluator.py recibe el datetime
+            # naive original y `data.start_at <= self._now()` explota con
+            # `TypeError: can't compare offset-naive and offset-aware datetimes`.
+            candidate_update: dict[str, Any] = {"start_at": start_at}
             if candidate.confidence < self._confidence_accept_threshold:
-                candidate = candidate.model_copy(
-                    update={"processing_status": ProcessingStatus.PENDING_REVIEW}
-                )
+                candidate_update["processing_status"] = ProcessingStatus.PENDING_REVIEW
+            candidate = candidate.model_copy(update=candidate_update)
             results.append(candidate)
         return results
 
