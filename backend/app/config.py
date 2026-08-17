@@ -87,8 +87,8 @@ class Settings(BaseSettings):
     llm_model: str | None = Field(default=None)
     llm_base_url: str | None = Field(default=None)
     llm_api_key: str | None = Field(default=None)
-    llm_max_tokens: int = Field(default=4096)
-    llm_timeout_seconds: float = Field(default=30.0)
+    llm_max_tokens: int = Field(default=8192)
+    llm_timeout_seconds: float = Field(default=60.0)
     llm_max_retries: int = Field(default=1)
 
     # --- Google Vision (OCR) ---
