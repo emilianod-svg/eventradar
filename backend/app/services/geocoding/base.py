@@ -29,7 +29,7 @@ def _is_precise_result(result: dict) -> bool:
 
 
 def _candidate_to_dict(candidate: GeocodingCandidate) -> dict:
-    return {
+    result = {
         "latitude": candidate.latitude,
         "longitude": candidate.longitude,
         "precision": candidate.precision or candidate.metadata.get("precision", "estimated"),
@@ -45,6 +45,9 @@ def _candidate_to_dict(candidate: GeocodingCandidate) -> dict:
         "raw_reference": candidate.raw_reference,
         "normalized_name": candidate.normalized_name,
     }
+    if candidate.metadata:
+        result["metadata"] = dict(candidate.metadata)
+    return result
 
 
 def _candidates_to_dict(candidates: list[GeocodingCandidate], query: str) -> dict:

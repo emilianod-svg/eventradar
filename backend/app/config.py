@@ -136,6 +136,18 @@ class Settings(BaseSettings):
     geocoding_circuit_breaker_reset_seconds: float = Field(default=60.0)
     geocoding_allowed_country_code: str = Field(default="ar")
     geocoding_catalog_path: str = Field(default="data/geocoding_catalog.json")
+    geocoding_consensus_min_providers: int = Field(
+        default=2,
+        ge=1,
+        description="Cantidad mínima de proveedores que deben coincidir para aceptar un consenso.",
+    )
+    geocoding_consensus_max_distance_meters: float = Field(
+        default=300.0,
+        ge=0.0,
+        description=(
+            "Distancia máxima entre proveedores para considerar que apuntan al mismo lugar."
+        ),
+    )
 
     # --- Umbrales geográficos ---
     geo_confidence_reject_threshold: float = Field(default=0.50)
