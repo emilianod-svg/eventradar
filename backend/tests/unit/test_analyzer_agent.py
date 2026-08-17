@@ -159,6 +159,128 @@ async def test_analyzer_agent_infers_missing_event_fields_from_text() -> None:
 
 
 @pytest.mark.asyncio
+async def test_analyzer_agent_infers_month_only_start_at_from_text() -> None:
+    raw = RawContentCandidate(
+        source_id=uuid4(),
+        url="https://misionesonline.net/2026/08/17/visita-del-papa-leon-xiv-2/",
+        raw_text=(
+            "El gobierno nacional comienza los preparativos del operativo de seguridad y logística para la visita del papa León XIV en noviembre\n"
+            "La secretaria General de la Presidencia, Karina Milei, encabeza los encuentros de coordinación con funcionarios porteños, bonaerenses y de la Iglesia Católica."
+        ),
+        fetched_at=datetime(2026, 8, 17, tzinfo=UTC),
+        published_at=datetime(2026, 8, 17, tzinfo=UTC),
+        content_hash="hash-month-only",
+    )
+    llm = FakeLLMClient({"is_event": True, "confidence": 0.9, "title": "Visita del papa León XIV a Argentina"})
+
+    agent = AnalyzerAgent(llm_client=llm)
+    result = await agent.execute(raw)
+
+    assert len(result) == 1
+    assert result[0].start_at is not None
+    assert result[0].start_at.year == 2026
+    assert result[0].start_at.month == 11
+    assert result[0].start_at.day == 1
+
+
+@pytest.mark.asyncio
+async def test_analyzer_agent_infers_date_range_from_text() -> None:
+    raw = RawContentCandidate(
+        source_id=uuid4(),
+        url="https://example.com/evento",
+        raw_text="Fecha: del 17 al 22 de agosto de 2026. Feria y actividades especiales.",
+        fetched_at=datetime(2026, 8, 1, tzinfo=UTC),
+        published_at=datetime(2026, 8, 1, tzinfo=UTC),
+        content_hash="hash-range",
+    )
+    llm = FakeLLMClient({"is_event": True, "confidence": 0.9, "title": "Feria"})
+
+    agent = AnalyzerAgent(llm_client=llm)
+    result = await agent.execute(raw)
+
+    assert len(result) == 1
+    assert result[0].start_at is not None
+    assert result[0].start_at.year == 2026
+    assert result[0].start_at.month == 8
+    assert result[0].start_at.day == 17
+    assert result[0].end_at is not None
+    assert result[0].end_at.year == 2026
+    assert result[0].end_at.month == 8
+    assert result[0].end_at.day == 22
+
+
+@pytest.mark.asyncio
+async def test_analyzer_agent_infers_date_range_without_el_from_text() -> None:
+    raw = RawContentCandidate(
+        source_id=uuid4(),
+        url="https://example.com/evento-rango",
+        raw_text="La gira se desarrollará entre 8 y 11 de noviembre de 2026 en Posadas.",
+        fetched_at=datetime(2026, 8, 1, tzinfo=UTC),
+        published_at=datetime(2026, 8, 1, tzinfo=UTC),
+        content_hash="hash-range-no-el",
+    )
+    llm = FakeLLMClient({"is_event": True, "confidence": 0.9, "title": "Gira"})
+
+    agent = AnalyzerAgent(llm_client=llm)
+    result = await agent.execute(raw)
+
+    assert len(result) == 1
+    assert result[0].start_at is not None
+    assert result[0].start_at.year == 2026
+    assert result[0].start_at.month == 11
+    assert result[0].start_at.day == 8
+    assert result[0].end_at is not None
+    assert result[0].end_at.year == 2026
+    assert result[0].end_at.month == 11
+    assert result[0].end_at.day == 11
+
+
+@pytest.mark.asyncio
+async def test_analyzer_agent_infers_date_range_from_nearby_month_context() -> None:
+    raw = RawContentCandidate(
+        source_id=uuid4(),
+        url="https://example.com/evento-rango-contexto",
+        raw_text="La gira se desarrollará del 8 al 11, en noviembre de 2026, en Posadas.",
+        fetched_at=datetime(2026, 8, 1, tzinfo=UTC),
+        published_at=datetime(2026, 8, 1, tzinfo=UTC),
+        content_hash="hash-range-context",
+    )
+    llm = FakeLLMClient({"is_event": True, "confidence": 0.9, "title": "Gira"})
+
+    agent = AnalyzerAgent(llm_client=llm)
+    result = await agent.execute(raw)
+
+    assert len(result) == 1
+    assert result[0].start_at is not None
+    assert result[0].start_at.year == 2026
+    assert result[0].start_at.month == 11
+    assert result[0].start_at.day == 8
+    assert result[0].end_at is not None
+    assert result[0].end_at.year == 2026
+    assert result[0].end_at.month == 11
+    assert result[0].end_at.day == 11
+
+
+@pytest.mark.asyncio
+async def test_analyzer_agent_does_not_use_registration_deadline_as_start_at() -> None:
+    raw = RawContentCandidate(
+        source_id=uuid4(),
+        url="https://example.com/evento-inscripcion",
+        raw_text="Inscripción abierta hasta el 13 de noviembre de 2026.",
+        fetched_at=datetime(2026, 8, 1, tzinfo=UTC),
+        published_at=datetime(2026, 8, 1, tzinfo=UTC),
+        content_hash="hash-deadline",
+    )
+    llm = FakeLLMClient({"is_event": True, "confidence": 0.9, "title": "Convocatoria"})
+
+    agent = AnalyzerAgent(llm_client=llm)
+    result = await agent.execute(raw)
+
+    assert len(result) == 1
+    assert result[0].start_at is None
+
+
+@pytest.mark.asyncio
 async def test_analyzer_agent_uses_published_at_as_extraction_anchor_when_available() -> None:
     raw = RawContentCandidate(
         source_id=uuid4(),

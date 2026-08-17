@@ -64,16 +64,23 @@ async def test_evaluator_reviews_low_confidence_events() -> None:
 
 
 @pytest.mark.asyncio
-async def test_evaluator_rejects_missing_required_fields() -> None:
+async def test_evaluator_rejects_missing_title() -> None:
     agent = EvaluatorAgent(existing_events=[])
 
-    result = await agent.execute(_candidate(title="", venue_name=" ", address="", confidence=0.9))
+    result = await agent.execute(_candidate(title="", venue_name="Lugar", address="", confidence=0.9))
 
     assert result.decision == EvaluationDecisionType.REJECT
-    assert result.reasons == [
-        "missing_title",
-        "missing_venue_name",
-    ]
+    assert result.reasons == ["missing_title"]
+
+
+@pytest.mark.asyncio
+async def test_evaluator_reviews_missing_venue_name() -> None:
+    agent = EvaluatorAgent(existing_events=[])
+
+    result = await agent.execute(_candidate(venue_name="", confidence=0.9))
+
+    assert result.decision == EvaluationDecisionType.REVIEW
+    assert result.reasons == ["missing_venue_name"]
 
 
 @pytest.mark.asyncio

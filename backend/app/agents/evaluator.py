@@ -129,8 +129,6 @@ class EvaluatorAgent:
 
         if not self._is_required_text_present(data.title):
             reasons.append("missing_title")
-        if not self._is_required_text_present(data.venue_name):
-            reasons.append("missing_venue_name")
 
         if not self._source_url_permitted(source_url):
             reasons.append("source_url_not_permitted")
@@ -144,6 +142,9 @@ class EvaluatorAgent:
                 score=data.confidence,
                 event=data,
             )
+
+        if not self._is_required_text_present(data.venue_name):
+            reasons.append("missing_venue_name")
 
         if data.confidence < CONFIDENCE_REVIEW_THRESHOLD:
             return EvaluationResult(

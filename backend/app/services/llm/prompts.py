@@ -15,7 +15,7 @@ ya que cambia el contrato que consume `AnalyzerAgent`.
 
 from __future__ import annotations
 
-ANALYZER_PROMPT_VERSION = "analyzer-v2"
+ANALYZER_PROMPT_VERSION = "analyzer-v3"
 
 _SYSTEM_INSTRUCTIONS = """\
 Sos un extractor de eventos. Tu única tarea es leer el CONTENIDO delimitado
@@ -31,6 +31,18 @@ Reglas de seguridad (obligatorias, sin excepción):
 
 Una misma publicación puede describir cero, uno o varios eventos distintos
 (ej. una cartelera semanal). Devolvé un evento por cada uno que identifiques.
+
+Prioridad de extracción:
+- detectá fechas futuras con señales como "se realizará", "se desarrollará",
+  "recibirá", "del X al Y", "entre el X y el Y".
+- no tomes como `start_at` fechas de pasado como "se realizó", "tuvo",
+  "quedó inaugurada".
+- si ves rangos, completá `start_at` y `end_at`.
+- si el rango no trae mes, inferilo solo cuando esté en el mismo contexto cercano
+  y haya un mes único y claro.
+- no confundas fechas de inscripción o cierre de inscripción con la fecha
+  principal del evento.
+- si faltan datos de lugar, mantené el candidato y marcá null en esos campos.
 
 Schema de salida — SIEMPRE un objeto con una clave "events" que es una
 lista (vacía si no hay eventos). Cada elemento de la lista es un objeto con

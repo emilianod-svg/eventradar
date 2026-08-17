@@ -191,9 +191,16 @@ class AnalyzerAgent:
         anchor = data.published_at or data.fetched_at
 
         if not enriched.get("start_at"):
-            inferred_start = self._infer_start_at(data.raw_text, anchor)
-            if inferred_start is not None:
+            inferred_range = self._infer_date_range(data.raw_text, anchor)
+            if inferred_range is not None:
+                inferred_start, inferred_end = inferred_range
                 enriched["start_at"] = inferred_start.isoformat()
+                if not enriched.get("end_at"):
+                    enriched["end_at"] = inferred_end.isoformat()
+            else:
+                inferred_start = self._infer_start_at(data.raw_text, anchor)
+                if inferred_start is not None:
+                    enriched["start_at"] = inferred_start.isoformat()
 
         if not enriched.get("venue_name"):
             inferred_venue = self._infer_venue_name(data.raw_text)
@@ -225,7 +232,137 @@ class AnalyzerAgent:
             return relative
 
         absolute = self._infer_absolute_date(normalized_text, anchor)
-        return absolute
+        if absolute is not None:
+            return absolute
+
+        month_only = self._infer_month_only_date(normalized_text, anchor)
+        if month_only is not None:
+            return month_only
+
+        return None
+
+    def _infer_date_range(self, raw_text: str, anchor: datetime) -> tuple[datetime, datetime] | None:
+        normalized_text = self._strip_accents(raw_text.casefold())
+
+        patterns = (
+            re.compile(
+                r"\b(?:fecha:\s*)?(?:del|desde\s+el)\s+(?P<start_day>\d{1,2})\s+"
+                r"(?:al|hasta)\s+(?P<end_day>\d{1,2})\s+de\s+"
+                r"(?P<month>enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
+                r"septiembre|setiembre|octubre|noviembre|diciembre)"
+                r"(?:\s+de\s+(?P<year>\d{4}))?\b"
+            ),
+            re.compile(
+                r"\b(?:fecha:\s*)?(?:del|desde\s+el)\s+(?P<start_day>\d{1,2})\s+"
+                r"(?:al|hasta)\s+(?P<end_day>\d{1,2})\b"
+            ),
+            re.compile(
+                r"\bentre\s+(?:el\s+)?(?P<start_day>\d{1,2})\s+y\s+(?:el\s+)?(?P<end_day>\d{1,2})\b"
+            ),
+        )
+
+        for pattern in patterns:
+            match = pattern.search(normalized_text)
+            if match is None:
+                continue
+
+            month = self._month_from_context(
+                explicit_month=match.groupdict().get("month"),
+                text=normalized_text,
+                match_start=match.start(),
+                match_end=match.end(),
+            )
+            if month is None:
+                continue
+
+            start_day = int(match.group("start_day"))
+            end_day = int(match.group("end_day"))
+            explicit_year = match.groupdict().get("year")
+            year = self._year_from_context(explicit_year, normalized_text, match.start(), match.end())
+            if year is None:
+                continue
+
+            try:
+                start = anchor.replace(year=year, month=month, day=start_day, hour=0, minute=0, second=0, microsecond=0)
+                end = anchor.replace(
+                    year=year,
+                    month=month,
+                    day=end_day,
+                    hour=23,
+                    minute=59,
+                    second=59,
+                    microsecond=0,
+                )
+            except ValueError:
+                continue
+
+            if explicit_year is None and start.date() < anchor.date():
+                try:
+                    start = start.replace(year=year + 1)
+                    end = end.replace(year=year + 1)
+                except ValueError:
+                    continue
+
+            if end < start:
+                continue
+
+            return start, end
+
+        return None
+
+    def _month_from_context(
+        self,
+        *,
+        explicit_month: str | None,
+        text: str,
+        match_start: int,
+        match_end: int,
+    ) -> int | None:
+        if explicit_month is not None:
+            return self._month_number(explicit_month)
+
+        window = self._context_window(text, match_start, match_end)
+        months = {
+            month
+            for month in (
+                self._month_number(name)
+                for name in re.findall(
+                    r"\b(enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
+                    r"septiembre|setiembre|octubre|noviembre|diciembre)\b",
+                    window,
+                )
+            )
+            if month is not None
+        }
+        if len(months) == 1:
+            return next(iter(months))
+        return None
+
+    def _year_from_context(
+        self,
+        explicit_year: str | None,
+        text: str,
+        match_start: int,
+        match_end: int,
+    ) -> int | None:
+        if explicit_year is not None:
+            return int(explicit_year)
+
+        window = self._context_window(text, match_start, match_end)
+        years = {
+            int(value)
+            for value in re.findall(r"\b(20\d{2})\b", window)
+        }
+        if len(years) == 1:
+            return next(iter(years))
+        if len(years) > 1:
+            return None
+        return None
+
+    def _context_window(self, text: str, match_start: int, match_end: int, radius: int = 120) -> str:
+        window_start = max(0, match_start - radius)
+        window_end = min(len(text), match_end + radius)
+        return text[window_start:window_end]
 
     def _infer_relative_date(self, text: str, anchor: datetime) -> datetime | None:
         weekday_pattern = re.compile(
@@ -262,6 +399,9 @@ class AnalyzerAgent:
         if match is None:
             return None
 
+        if self._looks_like_deadline_context(text, match.start()):
+            return None
+
         month = self._month_number(match.group("month"))
         if month is None:
             return None
@@ -285,6 +425,54 @@ class AnalyzerAgent:
             second=0,
             microsecond=0,
         )
+
+    def _infer_month_only_date(self, text: str, anchor: datetime) -> datetime | None:
+        month_pattern = re.compile(
+            r"\b(?:en\s+)?(?P<month>enero|febrero|marzo|abril|mayo|junio|julio|agosto|"
+            r"septiembre|setiembre|octubre|noviembre|diciembre)(?:\s+de\s+(?P<year>\d{4}))?\b"
+        )
+        match = month_pattern.search(text)
+        if match is None:
+            return None
+
+        if self._looks_like_deadline_context(text, match.start()):
+            return None
+
+        month = self._month_number(match.group("month"))
+        if month is None:
+            return None
+
+        year = int(match.group("year")) if match.group("year") else anchor.year
+        try:
+            target = anchor.replace(year=year, month=month, day=1)
+        except ValueError:
+            return None
+        if not match.group("year") and target.date() < anchor.date():
+            try:
+                target = target.replace(year=year + 1)
+            except ValueError:
+                return None
+
+        time_value = self._infer_time(text, start_index=match.end())
+        return target.replace(
+            hour=time_value[0],
+            minute=time_value[1],
+            second=0,
+            microsecond=0,
+        )
+
+    def _looks_like_deadline_context(self, text: str, match_start: int) -> bool:
+        window_start = max(0, match_start - 80)
+        window = text[window_start:match_start]
+        deadline_markers = (
+            "inscripcion",
+            "inscripciones",
+            "hasta",
+            "abierta hasta",
+            "cierra",
+            "cierre",
+        )
+        return any(marker in window for marker in deadline_markers)
 
     def _infer_time(self, text: str, *, start_index: int = 0) -> tuple[int, int]:
         time_pattern = re.compile(r"\b(?:a las|las)\s+(?P<hour>\d{1,2})(?::(?P<minute>\d{2}))?\b")
