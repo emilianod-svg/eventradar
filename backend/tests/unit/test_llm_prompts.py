@@ -39,7 +39,7 @@ def test_prompt_isolates_untrusted_content_with_delimiters() -> None:
 
 
 def test_prompt_version_is_stable_constant() -> None:
-    assert ANALYZER_PROMPT_VERSION == "analyzer-v2"
+    assert ANALYZER_PROMPT_VERSION == "analyzer-v3"
 
 
 def test_prompt_declares_multi_event_wrapper() -> None:
@@ -47,3 +47,10 @@ def test_prompt_declares_multi_event_wrapper() -> None:
     prompt = build_analyzer_prompt(text="texto", extraction_date_iso="2026-08-12T00:00:00Z")
 
     assert '"events"' in prompt
+
+
+def test_prompt_mentions_contextual_range_inference() -> None:
+    prompt = build_analyzer_prompt(text="texto", extraction_date_iso="2026-08-12T00:00:00Z")
+
+    assert "contexto cercano" in prompt
+    assert "mes único y claro" in prompt

@@ -7,6 +7,7 @@ from uuid import uuid4
 
 import pytest
 from app.agents.geo_classifier import GeoClassifierAgent
+from app.config import get_settings
 from app.domain.entities import EventCandidate
 from app.domain.enums import ProcessingStatus
 from app.services.geocoding.base import FallbackGeocodingClient
@@ -169,12 +170,20 @@ async def test_geo_classifier_uses_catalog_before_geocoding() -> None:
 
 
 def test_geo_classifier_threshold_boundaries() -> None:
+    settings = get_settings()
     agent = GeoClassifierAgent(geocoding_client=EmptyGeocodingClient())
 
-    assert agent._decision_from_confidence(0.49) == "rejected"
-    assert agent._decision_from_confidence(0.50) == "manual_review"
-    assert agent._decision_from_confidence(0.75) == "provisional"
-    assert agent._decision_from_confidence(0.90) == "accepted"
+    assert (
+        agent._decision_from_confidence(settings.geo_confidence_reject_threshold - 0.01)
+        == "rejected"
+    )
+    assert (
+        agent._decision_from_confidence(settings.geo_confidence_reject_threshold) == "manual_review"
+    )
+    assert (
+        agent._decision_from_confidence(settings.geo_confidence_review_threshold) == "provisional"
+    )
+    assert agent._decision_from_confidence(settings.geo_confidence_auto_threshold) == "accepted"
 
 
 @pytest.mark.asyncio
