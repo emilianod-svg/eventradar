@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from collections.abc import AsyncIterator
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+from types import SimpleNamespace
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -16,8 +18,82 @@ from app.api.v1 import router as v1_router
 from app.config import get_settings
 from app.domain.errors import AppError, error_envelope
 from app.observability import configure_logging, new_correlation_id, set_correlation_id
+from app.services.sources.bootstrap import SourceBootstrapService
+from app.services.sources.normalization import normalize_adapter_type
+from app.services.sources.validation import SourceValidationService
 
 logger = logging.getLogger("eventradar")
+
+
+async def _run_source_background_tasks(app: FastAPI) -> None:
+    settings = get_settings()
+    validator = SourceValidationService()
+    validated_ok = 0
+    validated_invalid = 0
+    discovered_candidates_count = 0
+    discovered_inserted = 0
+    try:
+        from app.models.source import Source
+
+        sources = await Source.filter(active=True)
+        for source in sources:
+            try:
+                if settings.source_validate_on_startup:
+                    validation = await validator.validate_source(source)
+                    if validation.ok:
+                        validated_ok += 1
+                    else:
+                        validated_invalid += 1
+                    await validator.persist_validation(source, validation)
+
+                if (
+                    settings.source_discovery_enabled
+                    and normalize_adapter_type(source.adapter_type) == "scrapy"
+                ):
+                    discovery = await validator.discover_feeds(source)
+                    if discovery.ok and discovery.discovered_urls:
+                        validated_candidates: list[str] = []
+                        for candidate_url in discovery.discovered_urls:
+                            discovered_candidates_count += 1
+                            candidate = await validator.validate_catalog_entry(
+                                SimpleNamespace(
+                                    name=source.name,
+                                    base_url=candidate_url,
+                                    adapter_type="rss",
+                                )
+                            )
+                            if candidate.ok:
+                                validated_candidates.append(candidate_url)
+                        if validated_candidates:
+                            discovered_inserted += await validator.persist_discovered_urls(
+                                source, validated_candidates
+                            )
+            except Exception:  # noqa: BLE001
+                logger.exception(
+                    "source_background_task_failed",
+                    extra={"source_id": str(source.id), "source_name": source.name},
+                )
+    except Exception:  # noqa: BLE001
+        logger.exception("source_background_task_failed")
+    else:
+        logger.info(
+            "source_background_tasks_completed",
+            extra={
+                "validated_ok": validated_ok,
+                "validated_invalid": validated_invalid,
+                "discovered_candidates": discovered_candidates_count,
+                "discovered_inserted": discovered_inserted,
+            },
+        )
+
+
+async def _cancel_source_background_task(app: FastAPI) -> None:
+    task = getattr(app.state, "source_background_task", None)
+    if task is None:
+        return
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
 
 
 @asynccontextmanager
@@ -31,8 +107,15 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         generate_schemas=False,
         add_exception_handlers=False,
     ):
+        if settings.source_bootstrap_enabled:
+            await SourceBootstrapService().bootstrap()
+        if settings.source_validate_on_startup or settings.source_discovery_enabled:
+            app.state.source_background_task = asyncio.create_task(
+                _run_source_background_tasks(app)
+            )
         logger.info("EventRadar backend iniciado (environment=%s)", settings.environment)
         yield
+        await _cancel_source_background_task(app)
     logger.info("EventRadar backend detenido")
 
 

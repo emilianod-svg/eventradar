@@ -50,3 +50,13 @@ def test_production_rejects_wildcard_cors() -> None:
 def test_cors_wildcard_allowed_outside_production() -> None:
     settings = Settings(_env_file=None, cors_allowed_origins="*")
     assert settings.cors_origins_list == ["*"]
+
+
+def test_source_bootstrap_defaults_are_enabled() -> None:
+    settings = Settings(_env_file=None)
+
+    assert settings.source_bootstrap_enabled is True
+    assert settings.source_validate_on_startup is False
+    assert settings.source_discovery_enabled is False
+    assert settings.source_request_timeout_seconds == 10.0
+    assert settings.source_max_redirects == 3

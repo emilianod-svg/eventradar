@@ -1,0 +1,86 @@
+[
+  {
+    "name": "El Territorio - Agenda",
+    "base_url": "https://www.elterritorio.com.ar/rss/edicion-impresa-agenda/",
+    "adapter_type": "rss",
+    "active": true,
+    "reliability_score": 0.9
+  },
+  {
+    "name": "El Territorio - Cultura",
+    "base_url": "https://www.elterritorio.com.ar/rss/cultura/",
+    "adapter_type": "rss",
+    "active": true,
+    "reliability_score": 0.85
+  },
+  {
+    "name": "El Territorio - Misiones",
+    "base_url": "https://www.elterritorio.com.ar/rss/misiones/",
+    "adapter_type": "rss",
+    "active": true,
+    "reliability_score": 0.75
+  },
+  {
+    "name": "El Territorio - Viajes y Turismo",
+    "base_url": "https://www.elterritorio.com.ar/rss/viajes-turismo/",
+    "adapter_type": "rss",
+    "active": true,
+    "reliability_score": 0.75
+  },
+  {
+    "name": "Cultura Misiones",
+    "base_url": "https://cultura.misiones.gob.ar/feed/",
+    "adapter_type": "rss",
+    "active": true,
+    "reliability_score": 0.9
+  },
+  {
+    "name": "Turismo Misiones",
+    "base_url": "https://turismomisiones.com.ar/feed/",
+    "adapter_type": "rss",
+    "active": true,
+    "reliability_score": 0.85
+  },
+  {
+    "name": "Misiones Online",
+    "base_url": "https://misionesonline.net/feed/",
+    "adapter_type": "rss",
+    "active": true,
+    "reliability_score": 0.7
+  },
+  {
+    "name": "Primera Edicion",
+    "base_url": "https://www.primeraedicion.com.ar/feed/",
+    "adapter_type": "rss",
+    "active": true,
+    "reliability_score": 0.7
+  },
+  {
+    "name": "Ticket Misiones",
+    "base_url": "https://ticketmisiones.com/eventos-por-ciudad?ciudad=Posadas",
+    "adapter_type": "scrapy",
+    "active": true,
+    "reliability_score": 0.8
+  },
+  {
+    "name": "Turismo Posadas",
+    "base_url": "https://www.turismoposadas.tur.ar/mice/agenda-mice",
+    "adapter_type": "scrapy",
+    "active": true,
+    "reliability_score": 0.85
+  },
+  {
+    "name": "El Territorio - Agenda Web",
+    "base_url": "https://www.elterritorio.com.ar/agenda",
+    "adapter_type": "scrapy",
+    "active": false,
+    "reliability_score": 0.8
+  },
+  {
+    "name": "Municipalidad de Posadas - Cultura",
+    "base_url": "https://posadas.gov.ar/cultura/",
+    "adapter_type": "scrapy",
+    "active": true,
+    "reliability_score": 0.8
+  }
+]

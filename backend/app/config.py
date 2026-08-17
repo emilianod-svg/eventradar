@@ -100,6 +100,17 @@ class Settings(BaseSettings):
     )
     ocr_enabled: bool = Field(default=False)
 
+    # --- Bootstrap de fuentes ---
+    source_catalog_path: str = Field(default="data/source_catalog.json")
+    source_bootstrap_enabled: bool = Field(default=True)
+    source_validate_on_startup: bool = Field(default=False)
+    source_discovery_enabled: bool = Field(default=False)
+    source_request_timeout_seconds: float = Field(default=10.0)
+    source_max_redirects: int = Field(default=3)
+    source_max_response_bytes: int = Field(default=2_000_000)
+    source_discovery_max_urls_per_domain: int = Field(default=5)
+    source_user_agent: str = Field(default="EventRadar/0.1 (source bootstrap)")
+
     # --- Nominatim / OpenStreetMap ---
     nominatim_base_url: str = Field(default="https://nominatim.openstreetmap.org")
     nominatim_user_agent: str = Field(default="EventRadar/0.1 (contacto pendiente)")
