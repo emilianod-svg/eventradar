@@ -8,6 +8,54 @@ from app.services.llm.ollama import OllamaLLMClient
 
 
 @pytest.mark.asyncio
+async def test_extract_event_strips_json_code_fence_with_language_tag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={
+                "response": '```json\n{"is_event": true, "confidence": 0.85}\n```',
+            },
+        )
+
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setenv("LLM_BASE_URL", "http://localhost:11434")
+    monkeypatch.setenv("LLM_MODEL", "minimax-m3:cloud")
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+
+    client = OllamaLLMClient(transport=transport)
+    result = await client.extract_event(text="texto", extraction_date_iso="2026-08-12T00:00:00Z")
+
+    assert result == {"is_event": True, "confidence": 0.85}
+
+
+@pytest.mark.asyncio
+async def test_extract_event_strips_bare_code_fence(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(
+            200,
+            json={"response": '```\n{"is_event": true, "confidence": 0.85}\n```'},
+        )
+
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setenv("LLM_BASE_URL", "http://localhost:11434")
+    monkeypatch.setenv("LLM_MODEL", "minimax-m3:cloud")
+    monkeypatch.setenv("LLM_PROVIDER", "ollama")
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+
+    client = OllamaLLMClient(transport=transport)
+    result = await client.extract_event(text="texto", extraction_date_iso="2026-08-12T00:00:00Z")
+
+    assert result == {"is_event": True, "confidence": 0.85}
+
+
+@pytest.mark.asyncio
 async def test_extract_event_parses_json_response(monkeypatch: pytest.MonkeyPatch) -> None:
     async def handler(request: httpx.Request) -> httpx.Response:
         assert request.url.path == "/api/generate"
