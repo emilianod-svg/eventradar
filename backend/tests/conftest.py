@@ -42,6 +42,11 @@ async def tortoise_connection() -> AsyncIterator[None]:
     aislada de la de desarrollo, migrada con `aerich upgrade`).
     """
     await Tortoise.init(config=build_tortoise_orm_config())
+    conn = Tortoise.get_connection("default")
+    # Truncate ANTES del test: cualquier test previo (p. ej. el que ejecuta el
+    # lifespan real de la app y dispara el bootstrap del catálogo de fuentes)
+    # puede dejar filas en la base compartida y contaminar a los siguientes.
+    await conn.execute_query(f"TRUNCATE TABLE {', '.join(_TABLES_TO_CLEAR)} CASCADE")
     try:
         yield
     finally:
