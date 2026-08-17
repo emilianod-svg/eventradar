@@ -72,6 +72,24 @@
     "allowed": true
   },
   {
+    "name": "Polideportivo Municipal Ernesto Finito Gehrmann",
+    "normalized_name": "polideportivo municipal ernesto finito gehrmann",
+    "aliases": [
+      "Polideportivo Finito Gehrmann",
+      "Polideportivo Municipal Ernesto \"Finito\" Gehrmann",
+      "Finito Gehrmann",
+      "CePARD",
+      "Centro Provincial de Alto Rendimiento Deportivo"
+    ],
+    "city": "Posadas",
+    "state": "Misiones",
+    "country_code": "ar",
+    "latitude": -27.3944879,
+    "longitude": -55.8967998,
+    "kind": "sports_center",
+    "allowed": true
+  },
+  {
     "name": "Centro de Conocimiento",
     "normalized_name": "centro de conocimiento",
     "aliases": ["Parque del Conocimiento", "Parque del Conocimiento Posadas"],

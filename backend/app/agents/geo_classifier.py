@@ -635,8 +635,8 @@ class GeoClassifierAgent:
 
     def _build_queries(self, data: EventCandidate, normalized_text: str) -> list[str]:
         candidates = [
-            data.address,
             data.venue_name,
+            data.address,
             data.geo_query,
             data.evidence.get("address"),
             data.evidence.get("venue_name"),

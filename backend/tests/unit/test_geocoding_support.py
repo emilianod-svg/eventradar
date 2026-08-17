@@ -33,6 +33,16 @@ def test_location_catalog_loads_default_catalog() -> None:
     assert match.exact is True
 
 
+def test_location_catalog_knows_finito_gehrmann() -> None:
+    catalog = LocationCatalog.default()
+    match = catalog.search("Polideportivo Finito Gehrmann")
+
+    assert match is not None
+    assert match.entry.name == "Polideportivo Municipal Ernesto Finito Gehrmann"
+    assert match.entry.latitude == -27.3944879
+    assert match.entry.longitude == -55.8967998
+
+
 def test_locationiq_uses_json_format() -> None:
     provider = LocationIQGeocodingProvider(
         base_url="https://us1.locationiq.com/v1",
