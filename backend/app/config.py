@@ -141,10 +141,62 @@ class Settings(BaseSettings):
     geo_confidence_reject_threshold: float = Field(default=0.50)
     geo_confidence_review_threshold: float = Field(default=0.75)
     geo_confidence_auto_threshold: float = Field(default=0.90)
+    geo_catalog_match_threshold: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Score de coincidencia contra el catálogo de ubicaciones para dar el lugar "
+            "por 'match exacto'."
+        ),
+    )
     geo_allowed_min_latitude: float | None = Field(default=None)
     geo_allowed_max_latitude: float | None = Field(default=None)
     geo_allowed_min_longitude: float | None = Field(default=None)
     geo_allowed_max_longitude: float | None = Field(default=None)
+
+    # --- Umbrales de decisión (Analizador / Evaluador, ver app/domain/decisions.py) ---
+    confidence_review_threshold: float = Field(
+        default=0.50,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Confianza mínima del LLM para no descartar el candidato (por debajo, se rechaza)."
+        ),
+    )
+    confidence_accept_threshold: float = Field(
+        default=0.70,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Confianza mínima para aceptar sin marcarlo a revisión manual "
+            "(entre REVIEW y ACCEPT queda en pending_review)."
+        ),
+    )
+    duplicate_candidate_threshold: float = Field(
+        default=0.50,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Similitud de título mínima para considerar dos eventos 'candidatos' "
+            "a duplicado (no implica fusión)."
+        ),
+    )
+    duplicate_review_threshold: float = Field(
+        default=0.75,
+        ge=0.0,
+        le=1.0,
+        description="Score de duplicado a partir del cual se manda a revisión manual.",
+    )
+    duplicate_auto_merge_threshold: float = Field(
+        default=0.90,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Score de duplicado a partir del cual se fusiona automáticamente "
+            "(requiere además compatibilidad de fecha y ubicación)."
+        ),
+    )
 
     # --- Google Geocoding (fallback futuro) ---
     google_geocoding_base_url: str = Field(
@@ -168,6 +220,25 @@ class Settings(BaseSettings):
     @classmethod
     def _no_wildcard_by_default(cls, value: str) -> str:
         return value.strip()
+
+    @model_validator(mode="after")
+    def validate_decision_thresholds(self) -> Settings:
+        if self.confidence_review_threshold > self.confidence_accept_threshold:
+            raise ValueError(
+                "CONFIDENCE_REVIEW_THRESHOLD no puede ser mayor que CONFIDENCE_ACCEPT_THRESHOLD "
+                f"({self.confidence_review_threshold} > {self.confidence_accept_threshold})."
+            )
+        if self.duplicate_candidate_threshold > self.duplicate_review_threshold:
+            raise ValueError(
+                "DUPLICATE_CANDIDATE_THRESHOLD no puede ser mayor que DUPLICATE_REVIEW_THRESHOLD "
+                f"({self.duplicate_candidate_threshold} > {self.duplicate_review_threshold})."
+            )
+        if self.duplicate_review_threshold > self.duplicate_auto_merge_threshold:
+            raise ValueError(
+                "DUPLICATE_REVIEW_THRESHOLD no puede ser mayor que DUPLICATE_AUTO_MERGE_THRESHOLD "
+                f"({self.duplicate_review_threshold} > {self.duplicate_auto_merge_threshold})."
+            )
+        return self
 
     @model_validator(mode="after")
     def validate_production_requirements(self) -> Settings:

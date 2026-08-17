@@ -27,7 +27,6 @@ from uuid import UUID
 from pydantic import ValidationError
 
 from app.config import get_settings
-from app.domain.decisions import CONFIDENCE_ACCEPT_THRESHOLD, CONFIDENCE_REVIEW_THRESHOLD
 from app.domain.entities import EventCandidate, RawContentCandidate
 from app.domain.enums import ProcessingStatus
 from app.models.classification import Classification
@@ -38,8 +37,24 @@ logger = logging.getLogger(__name__)
 
 
 class AnalyzerAgent:
-    def __init__(self, llm_client: LLMClient | None = None) -> None:
+    def __init__(
+        self,
+        llm_client: LLMClient | None = None,
+        confidence_accept_threshold: float | None = None,
+        confidence_review_threshold: float | None = None,
+    ) -> None:
+        settings = get_settings()
         self._llm_client = llm_client or get_llm_client()
+        self._confidence_accept_threshold = (
+            settings.confidence_accept_threshold
+            if confidence_accept_threshold is None
+            else confidence_accept_threshold
+        )
+        self._confidence_review_threshold = (
+            settings.confidence_review_threshold
+            if confidence_review_threshold is None
+            else confidence_review_threshold
+        )
 
     async def execute(self, data: RawContentCandidate) -> list[EventCandidate]:
         started_at = time.monotonic()
@@ -81,7 +96,7 @@ class AnalyzerAgent:
 
             if not candidate.is_event:
                 continue
-            if candidate.confidence < CONFIDENCE_REVIEW_THRESHOLD:
+            if candidate.confidence < self._confidence_review_threshold:
                 continue
             # Sección 9.2: "rechazar noticias sobre eventos pasados". El prompt
             # ya se lo pide al LLM, pero no es determinístico — se valida acá
@@ -101,7 +116,7 @@ class AnalyzerAgent:
                 start_at = start_at.replace(tzinfo=UTC)
             if start_at is not None and start_at < data.fetched_at:
                 continue
-            if candidate.confidence < CONFIDENCE_ACCEPT_THRESHOLD:
+            if candidate.confidence < self._confidence_accept_threshold:
                 candidate = candidate.model_copy(
                     update={"processing_status": ProcessingStatus.PENDING_REVIEW}
                 )

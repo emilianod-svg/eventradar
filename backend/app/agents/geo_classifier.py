@@ -114,7 +114,7 @@ class GeoClassifierAgent:
         self._threshold_reject = settings.geo_confidence_reject_threshold
         self._threshold_review = settings.geo_confidence_review_threshold
         self._threshold_auto = settings.geo_confidence_auto_threshold
-        self._catalog_threshold = 0.85
+        self._catalog_threshold = settings.geo_catalog_match_threshold
         self._weights = score_weights or GeoScoreWeights()
         self._weights.validate()
 
