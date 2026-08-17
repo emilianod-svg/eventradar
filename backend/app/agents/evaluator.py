@@ -166,7 +166,7 @@ class EvaluatorAgent:
                 score=data.confidence,
                 event=data,
             )
-        
+
         if not self._is_required_text_present(data.venue_name):
             reasons.append("missing_venue_name")
 
