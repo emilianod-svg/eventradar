@@ -195,11 +195,10 @@ class EvaluatorAgent:
                     event=data,
                 )
 
-        if (
-            data.confidence < CONFIDENCE_ACCEPT_THRESHOLD
-            or data.processing_status == ProcessingStatus.PENDING_REVIEW
-        ):
-            reasons.append("low_confidence_requires_review")
+        if data.confidence < CONFIDENCE_ACCEPT_THRESHOLD:
+            reasons.append("low_extraction_confidence")
+        if data.processing_status == ProcessingStatus.PENDING_REVIEW:
+            reasons.append("low_geo_confidence")
 
         duplicate = self._find_duplicate(data)
         if duplicate is not None:
