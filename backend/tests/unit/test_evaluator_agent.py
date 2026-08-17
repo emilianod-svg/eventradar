@@ -67,7 +67,9 @@ async def test_evaluator_reviews_low_confidence_events() -> None:
 async def test_evaluator_rejects_missing_title() -> None:
     agent = EvaluatorAgent(existing_events=[])
 
-    result = await agent.execute(_candidate(title="", venue_name="Lugar", address="", confidence=0.9))
+    result = await agent.execute(
+        _candidate(title="", venue_name="Lugar", address="", confidence=0.9)
+    )
 
     assert result.decision == EvaluationDecisionType.REJECT
     assert result.reasons == ["missing_title"]

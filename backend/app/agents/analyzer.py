@@ -198,9 +198,9 @@ class AnalyzerAgent:
                 if not enriched.get("end_at"):
                     enriched["end_at"] = inferred_end.isoformat()
             else:
-                inferred_start = self._infer_start_at(data.raw_text, anchor)
-                if inferred_start is not None:
-                    enriched["start_at"] = inferred_start.isoformat()
+                inferred_start_at = self._infer_start_at(data.raw_text, anchor)
+                if inferred_start_at is not None:
+                    enriched["start_at"] = inferred_start_at.isoformat()
 
         if not enriched.get("venue_name"):
             inferred_venue = self._infer_venue_name(data.raw_text)
@@ -241,7 +241,11 @@ class AnalyzerAgent:
 
         return None
 
-    def _infer_date_range(self, raw_text: str, anchor: datetime) -> tuple[datetime, datetime] | None:
+    def _infer_date_range(
+        self,
+        raw_text: str,
+        anchor: datetime,
+    ) -> tuple[datetime, datetime] | None:
         normalized_text = self._strip_accents(raw_text.casefold())
 
         patterns = (
@@ -278,12 +282,25 @@ class AnalyzerAgent:
             start_day = int(match.group("start_day"))
             end_day = int(match.group("end_day"))
             explicit_year = match.groupdict().get("year")
-            year = self._year_from_context(explicit_year, normalized_text, match.start(), match.end())
+            year = self._year_from_context(
+                explicit_year,
+                normalized_text,
+                match.start(),
+                match.end(),
+            )
             if year is None:
                 continue
 
             try:
-                start = anchor.replace(year=year, month=month, day=start_day, hour=0, minute=0, second=0, microsecond=0)
+                start = anchor.replace(
+                    year=year,
+                    month=month,
+                    day=start_day,
+                    hour=0,
+                    minute=0,
+                    second=0,
+                    microsecond=0,
+                )
                 end = anchor.replace(
                     year=year,
                     month=month,
@@ -349,17 +366,20 @@ class AnalyzerAgent:
             return int(explicit_year)
 
         window = self._context_window(text, match_start, match_end)
-        years = {
-            int(value)
-            for value in re.findall(r"\b(20\d{2})\b", window)
-        }
+        years = {int(value) for value in re.findall(r"\b(20\d{2})\b", window)}
         if len(years) == 1:
             return next(iter(years))
         if len(years) > 1:
             return None
         return None
 
-    def _context_window(self, text: str, match_start: int, match_end: int, radius: int = 120) -> str:
+    def _context_window(
+        self,
+        text: str,
+        match_start: int,
+        match_end: int,
+        radius: int = 120,
+    ) -> str:
         window_start = max(0, match_start - radius)
         window_end = min(len(text), match_end + radius)
         return text[window_start:window_end]

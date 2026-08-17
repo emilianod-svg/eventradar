@@ -42,6 +42,22 @@ class ExternalServiceNotConfiguredError(AppError):
     status_code = 503
 
 
+class LLMRateLimitedError(AppError):
+    """El proveedor LLM devolvió 429 (rate limit).
+
+    Se distingue de `ExternalServiceNotConfiguredError` porque el servicio
+    sí está disponible: hay que esperar (`retry_after`) antes de reintentar
+    en vez de tratarlo como una falla de configuración/conectividad.
+    """
+
+    code = "llm_rate_limited"
+    status_code = 503
+
+    def __init__(self, message: str, *, retry_after: float | None = None) -> None:
+        super().__init__(message, details={"retry_after": retry_after})
+        self.retry_after = retry_after
+
+
 class NotFoundError(AppError):
     code = "not_found"
     status_code = 404

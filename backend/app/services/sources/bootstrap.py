@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Any
@@ -17,6 +18,14 @@ from app.services.sources.normalization import normalize_adapter_type, normalize
 logger = logging.getLogger("eventradar.sources")
 
 _BOOTSTRAP_LOCK_KEY = 314159265
+
+# Single-flight: serializa los bootstrap concurrentes dentro del proceso. La
+# inicialización perezosa del pool de Tortoise (TransactionContextPooled) no
+# es atómica: dos `in_transaction()` concurrentes sobre una conexión nueva
+# crean dos pools y la conexión del primero se libera contra el segundo
+# (asyncpg.InterfaceError: Pool.release() received invalid connection).
+# `pg_advisory_xact_lock` se conserva para serializar entre procesos/workers.
+_bootstrap_lock = asyncio.Lock()
 
 
 @dataclass(slots=True)
@@ -42,7 +51,7 @@ class SourceBootstrapService:
         source_catalog = catalog or load_source_catalog(self._catalog_path)
         report = SourceBootstrapReport(configured=len(source_catalog.entries))
 
-        async with in_transaction() as conn:
+        async with _bootstrap_lock, in_transaction() as conn:
             await conn.execute_query(f"SELECT pg_advisory_xact_lock({_BOOTSTRAP_LOCK_KEY})")
             for entry in source_catalog.entries:
                 await self._upsert_entry(entry, report)

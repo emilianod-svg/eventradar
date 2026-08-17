@@ -164,14 +164,18 @@ async def test_analyzer_agent_infers_month_only_start_at_from_text() -> None:
         source_id=uuid4(),
         url="https://misionesonline.net/2026/08/17/visita-del-papa-leon-xiv-2/",
         raw_text=(
-            "El gobierno nacional comienza los preparativos del operativo de seguridad y logística para la visita del papa León XIV en noviembre\n"
-            "La secretaria General de la Presidencia, Karina Milei, encabeza los encuentros de coordinación con funcionarios porteños, bonaerenses y de la Iglesia Católica."
+            "El gobierno nacional comienza los preparativos del operativo de seguridad y logística "
+            "para la visita del papa León XIV en noviembre\n"
+            "La secretaria General de la Presidencia, Karina Milei, encabeza los encuentros de "
+            "coordinación con funcionarios porteños, bonaerenses y de la Iglesia Católica."
         ),
         fetched_at=datetime(2026, 8, 17, tzinfo=UTC),
         published_at=datetime(2026, 8, 17, tzinfo=UTC),
         content_hash="hash-month-only",
     )
-    llm = FakeLLMClient({"is_event": True, "confidence": 0.9, "title": "Visita del papa León XIV a Argentina"})
+    llm = FakeLLMClient(
+        {"is_event": True, "confidence": 0.9, "title": "Visita del papa León XIV a Argentina"}
+    )
 
     agent = AnalyzerAgent(llm_client=llm)
     result = await agent.execute(raw)
