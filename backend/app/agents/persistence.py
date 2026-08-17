@@ -20,6 +20,7 @@ exige.
 
 from __future__ import annotations
 
+import logging
 import re
 import unicodedata
 from dataclasses import dataclass
@@ -40,6 +41,8 @@ from app.models.review_item import ReviewItem
 from app.models.source import Source
 from app.models.source_score_history import SourceScoreHistory
 from app.services.scoring.base import ReliabilityScorer, get_reliability_scorer
+
+logger = logging.getLogger(__name__)
 
 _MERGEABLE_FIELDS = (
     "description",
@@ -97,20 +100,66 @@ class PersistenceAgent:
                 "y el Persistidor procesen el candidato."
             )
 
-        self._record_stats(data)
+        decision_data = await self._coerce_persistable_result(data)
+        self._record_stats(decision_data)
 
         async with in_transaction():
-            if data.decision == EvaluationDecisionType.ACCEPT:
-                return await self._accept(data)
-            if data.decision == EvaluationDecisionType.MERGE:
-                return await self._merge(data)
-            if data.decision == EvaluationDecisionType.REVIEW:
-                await self._review(data)
+            if decision_data.decision == EvaluationDecisionType.ACCEPT:
+                return await self._accept(decision_data)
+            if decision_data.decision == EvaluationDecisionType.MERGE:
+                return await self._merge(decision_data)
+            if decision_data.decision == EvaluationDecisionType.REVIEW:
+                await self._review(decision_data)
                 return None
-            if data.decision == EvaluationDecisionType.REJECT:
-                await self._reject(data)
+            if decision_data.decision == EvaluationDecisionType.REJECT:
+                await self._reject(decision_data)
                 return None
-            raise ValueError(f"PersistenceAgent.execute: decisión desconocida '{data.decision}'.")
+            raise ValueError(
+                f"PersistenceAgent.execute: decisión desconocida '{decision_data.decision}'."
+            )
+
+    async def _coerce_persistable_result(self, data: EvaluationResult) -> EvaluationResult:
+        if data.decision == EvaluationDecisionType.MERGE:
+            if data.duplicate_of is None:
+                return self._downgrade_to_review(
+                    data,
+                    "merge_without_duplicate_target",
+                )
+            if await Event.get_or_none(id=data.duplicate_of) is None:
+                return self._downgrade_to_review(
+                    data,
+                    "duplicate_event_not_found",
+                )
+            return data
+
+        if data.decision == EvaluationDecisionType.ACCEPT and not self._can_create_event(data.event):
+            return self._downgrade_to_review(
+                data,
+                "accept_without_persistable_fields",
+            )
+
+        return data
+
+    def _downgrade_to_review(self, data: EvaluationResult, reason: str) -> EvaluationResult:
+        logger.warning(
+            "persistence_result_downgraded",
+            extra={
+                "classification_id": str(data.event.classification_id)
+                if data.event.classification_id is not None
+                else None,
+                "reason": reason,
+                "original_decision": data.decision,
+            },
+        )
+        return data.model_copy(
+            update={
+                "decision": EvaluationDecisionType.REVIEW,
+                "reasons": list(data.reasons) + [reason],
+            }
+        )
+
+    def _can_create_event(self, candidate: EventCandidate) -> bool:
+        return bool(candidate.title and candidate.venue_name and candidate.start_at)
 
     def _record_stats(self, data: EvaluationResult) -> None:
         candidate = data.event

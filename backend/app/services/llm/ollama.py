@@ -36,6 +36,7 @@ class OllamaLLMClient:
             "model": self._model,
             "prompt": prompt,
             "stream": False,
+            "format": "json",
             "options": {"num_predict": self._max_tokens},
         }
 
@@ -60,6 +61,8 @@ class OllamaLLMClient:
                         "prompt_version": ANALYZER_PROMPT_VERSION,
                         "attempt": attempt,
                         "latency_ms": round(latency_ms, 1),
+                        "raw_output_len": len(raw_output) if isinstance(raw_output, str) else None,
+                        "raw_output_preview": self._preview_output(raw_output),
                     },
                 )
                 continue
@@ -96,13 +99,54 @@ class OllamaLLMClient:
         return response.json()
 
     def _parse_json_object(self, raw_output: str) -> dict[str, Any]:
-        cleaned = raw_output.strip()
-        if cleaned.startswith("```"):
-            cleaned = cleaned.strip("`")
+        cleaned = self._strip_code_fences(raw_output).strip()
+        candidates = [cleaned]
+        brace_index = cleaned.find("{")
+        if brace_index > 0:
+            candidates.append(cleaned[brace_index:])
+
+        decoder = json.JSONDecoder()
+        for candidate in candidates:
+            parsed = self._decode_json_object(candidate, decoder)
+            if parsed is not None:
+                return parsed
+
+        raise ValueError("La respuesta de Ollama no es JSON válido.")
+
+    def _decode_json_object(
+        self,
+        candidate: str,
+        decoder: json.JSONDecoder,
+    ) -> dict[str, Any] | None:
         try:
-            parsed = json.loads(cleaned)
-        except json.JSONDecodeError as exc:
-            raise ValueError("La respuesta de Ollama no es JSON válido.") from exc
-        if not isinstance(parsed, dict):
-            raise ValueError("La respuesta de Ollama debe ser un objeto JSON.")
-        return parsed
+            parsed, _ = decoder.raw_decode(candidate)
+        except json.JSONDecodeError:
+            return None
+
+        if isinstance(parsed, dict):
+            return parsed
+        if isinstance(parsed, str):
+            nested = parsed.strip()
+            if nested.startswith("{"):
+                try:
+                    nested_parsed = json.loads(nested)
+                except json.JSONDecodeError:
+                    return None
+                if isinstance(nested_parsed, dict):
+                    return nested_parsed
+        return None
+
+    def _strip_code_fences(self, raw_output: str) -> str:
+        text = raw_output.strip()
+        if not text.startswith("```"):
+            return text
+
+        text = text[3:]
+        if text.startswith("json"):
+            text = text[4:]
+        return text.strip().strip("`").strip()
+
+    def _preview_output(self, raw_output: object, limit: int = 240) -> str:
+        if not isinstance(raw_output, str):
+            return repr(raw_output)[:limit]
+        return raw_output.strip()[:limit]

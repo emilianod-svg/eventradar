@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
+from uuid import uuid4
 
 import pytest
 from app.agents.persistence import PersistenceAgent
@@ -187,6 +188,60 @@ async def test_reject_only_creates_decision(tortoise_connection) -> None:
     assert await ReviewItem.all().count() == 0
     decisions = await EvaluationDecision.filter(classification_id=classification.id)
     assert decisions[0].decision == EvaluationDecisionType.REJECT
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_accept_without_persistable_fields_is_downgraded_to_review(
+    tortoise_connection,
+) -> None:
+    source = await Source.create(name="s", base_url="https://s", adapter_type="rss")
+    classification = await _make_classification(source)
+    candidate = _candidate(
+        source,
+        classification.id,
+        title=None,
+        venue_name=None,
+        start_at=None,
+    )
+    result = EvaluationResult(
+        decision=EvaluationDecisionType.ACCEPT,
+        reasons=["passed_validation"],
+        score=0.85,
+        event=candidate,
+    )
+    agent = PersistenceAgent()
+
+    await agent.execute(result)
+
+    assert await Event.all().count() == 0
+    review_items = await ReviewItem.filter(classification_id=classification.id)
+    assert len(review_items) == 1
+    assert "accept_without_persistable_fields" in review_items[0].reason
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_merge_without_existing_duplicate_is_downgraded_to_review(
+    tortoise_connection,
+) -> None:
+    source = await Source.create(name="s", base_url="https://s", adapter_type="rss")
+    classification = await _make_classification(source)
+    candidate = _candidate(source, classification.id)
+    result = EvaluationResult(
+        decision=EvaluationDecisionType.MERGE,
+        duplicate_of=uuid4(),
+        score=0.93,
+        event=candidate,
+    )
+    agent = PersistenceAgent()
+
+    await agent.execute(result)
+
+    assert await Event.all().count() == 0
+    review_items = await ReviewItem.filter(classification_id=classification.id)
+    assert len(review_items) == 1
+    assert "duplicate_event_not_found" in review_items[0].reason
 
 
 @pytest.mark.integration

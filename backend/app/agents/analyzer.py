@@ -18,6 +18,7 @@ en esos campos hasta que el cliente los exponga; `model_name` y
 
 from __future__ import annotations
 
+import logging
 import re
 import time
 from datetime import UTC, datetime, timedelta
@@ -30,6 +31,10 @@ from app.domain.enums import ProcessingStatus
 from app.models.classification import Classification
 from app.services.llm.base import LLMClient, get_llm_client
 from app.services.llm.prompts import ANALYZER_PROMPT_VERSION
+from pydantic import ValidationError
+
+
+logger = logging.getLogger(__name__)
 
 
 class AnalyzerAgent:
@@ -46,15 +51,13 @@ class AnalyzerAgent:
         latency_ms = (time.monotonic() - started_at) * 1000
 
         events_list = self._extract_events_list(extracted)
+        is_event, confidence = self._summarize_events(events_list)
         classification_id = None
         if data.id is not None:
             classification = await Classification.create(
                 raw_content_id=data.id,
-                is_event=any(bool(event.get("is_event")) for event in events_list),
-                confidence=max(
-                    (float(event.get("confidence") or 0.0) for event in events_list),
-                    default=0.0,
-                ),
+                is_event=is_event,
+                confidence=confidence,
                 extracted_fields=extracted,
                 model_name=get_settings().llm_model,
                 prompt_version=ANALYZER_PROMPT_VERSION,
@@ -64,9 +67,17 @@ class AnalyzerAgent:
 
         results: list[EventCandidate] = []
         for event_dict in events_list:
-            normalized = self._normalize_candidate(event_dict, data, classification_id)
-            normalized = self._enrich_candidate(normalized, data)
-            candidate = EventCandidate.model_validate(normalized)
+            try:
+                normalized = self._normalize_candidate(event_dict, data, classification_id)
+                normalized = self._enrich_candidate(normalized, data)
+                candidate = EventCandidate.model_validate(normalized)
+            except (ValidationError, TypeError, ValueError):
+                logger.warning(
+                    "analyzer_event_skipped",
+                    exc_info=True,
+                    extra={"raw_content_id": str(data.id) if data.id is not None else None},
+                )
+                continue
 
             if not candidate.is_event:
                 continue
@@ -107,6 +118,19 @@ class AnalyzerAgent:
             # por no seguir el wrapper al pie de la letra.
             return [extracted]
         return []
+
+    def _summarize_events(self, events_list: list[dict]) -> tuple[bool, float]:
+        is_event = False
+        max_confidence = 0.0
+        for event in events_list:
+            if not isinstance(event, dict):
+                continue
+            if bool(event.get("is_event")):
+                is_event = True
+            confidence = event.get("confidence")
+            if isinstance(confidence, (int, float)):
+                max_confidence = max(max_confidence, float(confidence))
+        return is_event, max_confidence
 
     def _normalize_candidate(
         self,

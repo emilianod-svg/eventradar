@@ -226,6 +226,24 @@ async def test_analyzer_agent_filters_each_event_independently_within_batch() ->
 
 
 @pytest.mark.asyncio
+async def test_analyzer_agent_skips_invalid_event_and_keeps_valid_ones() -> None:
+    llm = FakeLLMClient(
+        {
+            "events": [
+                {"is_event": True, "confidence": "alta", "title": "Evento roto"},
+                {"is_event": True, "confidence": 0.87, "title": "Evento recuperado"},
+            ]
+        }
+    )
+
+    agent = AnalyzerAgent(llm_client=llm)
+    result = await agent.execute(_raw_candidate())
+
+    assert len(result) == 1
+    assert result[0].title == "Evento recuperado"
+
+
+@pytest.mark.asyncio
 async def test_analyzer_agent_rejects_event_with_start_at_before_fetched_at() -> None:
     # Sección 9.2 y 18.3: "rechazar noticias sobre eventos pasados". No hay
     # que confiar únicamente en que el LLM obedezca la instrucción del

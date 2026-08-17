@@ -268,7 +268,7 @@ class LocationIQGeocodingProvider(_HttpGeocodingProvider):
         params: dict[str, str | int | float] = {
             "q": query,
             "key": settings.locationiq_api_key or "",
-            "format": "jsonv2",
+            "format": "json",
             "addressdetails": 1,
             "accept-language": "es",
             "limit": limit,

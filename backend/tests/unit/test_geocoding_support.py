@@ -13,7 +13,7 @@ from app.services.geocoding.base import NotConfiguredGeocodingClient
 from app.services.geocoding.cache import InMemoryGeocodingCache
 from app.services.geocoding.catalog import LocationCatalog
 from app.services.geocoding.normalization import normalize_location_text
-from app.services.geocoding.providers import GeocodingProviderChain
+from app.services.geocoding.providers import GeocodingProviderChain, LocationIQGeocodingProvider
 from app.services.geocoding.resilience import AsyncRateLimiter, CircuitBreaker
 from app.services.geocoding.types import GeocodingCandidate
 
@@ -31,6 +31,27 @@ def test_location_catalog_loads_default_catalog() -> None:
     assert match is not None
     assert match.entry.name == "Plaza 9 de Julio"
     assert match.exact is True
+
+
+def test_locationiq_uses_json_format() -> None:
+    provider = LocationIQGeocodingProvider(
+        base_url="https://us1.locationiq.com/v1",
+        timeout_seconds=5.0,
+        enabled=True,
+        cache=InMemoryGeocodingCache(),
+        min_interval_seconds=0.0,
+        failure_threshold=3,
+        reset_seconds=60.0,
+        max_attempts=1,
+        backoff_base_seconds=0.5,
+        backoff_jitter_seconds=0.2,
+    )
+
+    params = provider.request_params("Posadas, Misiones", country_code="ar", limit=3)
+
+    assert params["format"] == "json"
+    assert params["q"] == "Posadas, Misiones"
+    assert params["countrycodes"] == "ar"
 
 
 @pytest.mark.asyncio
