@@ -28,6 +28,65 @@ class CorrelationIdFilter(logging.Filter):
         return True
 
 
+# Atributos que ya forman parte del `LogRecord` estándar (o del `fmt` base):
+# cualquier otra clave en `record.__dict__` viene de un `extra={...}` pasado
+# explícitamente por el código de la app y debe imprimirse.
+_STANDARD_RECORD_ATTRS = frozenset(
+    {
+        "name",
+        "msg",
+        "args",
+        "levelname",
+        "levelno",
+        "pathname",
+        "filename",
+        "module",
+        "exc_info",
+        "exc_text",
+        "stack_info",
+        "lineno",
+        "funcName",
+        "created",
+        "msecs",
+        "relativeCreated",
+        "thread",
+        "threadName",
+        "processName",
+        "process",
+        "taskName",
+        "message",
+        "asctime",
+        "correlation_id",
+    }
+)
+
+
+class ExtraFieldsFormatter(logging.Formatter):
+    """Formatter que además imprime cualquier campo pasado vía `extra=`.
+
+    `logging.Formatter` ignora silenciosamente las claves de `extra` que no
+    aparecen explícitamente en `fmt` — por eso campos como `model`,
+    `attempt`, `latency_ms` o `raw_output_preview` quedaban en el
+    `LogRecord` pero nunca se veían en la salida.
+    """
+
+    def format(self, record: logging.LogRecord) -> str:
+        base = super().format(record)
+        extras = {
+            key: value
+            for key, value in record.__dict__.items()
+            if key not in _STANDARD_RECORD_ATTRS
+        }
+        if not extras:
+            return base
+        extra_str = " ".join(f"{key}={self._render(value)}" for key, value in extras.items())
+        return f"{base} {extra_str}"
+
+    @staticmethod
+    def _render(value: object) -> str:
+        return str(value).replace("\n", "\\n").replace("\r", "")
+
+
 def configure_logging(level: str = "INFO") -> None:
     """Configura logging estructurado (texto plano con campos clave).
 
@@ -38,7 +97,7 @@ def configure_logging(level: str = "INFO") -> None:
 
     handler = logging.StreamHandler(sys.stdout)
     handler.addFilter(CorrelationIdFilter())
-    formatter = logging.Formatter(
+    formatter = ExtraFieldsFormatter(
         fmt=(
             "%(asctime)s level=%(levelname)s logger=%(name)s "
             "correlation_id=%(correlation_id)s message=%(message)s"

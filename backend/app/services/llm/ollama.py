@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 import time
 from typing import Any
 
@@ -14,6 +15,12 @@ from app.domain.errors import ExternalServiceNotConfiguredError
 from app.services.llm.prompts import ANALYZER_PROMPT_VERSION, build_analyzer_prompt
 
 logger = logging.getLogger(__name__)
+
+# El modelo a veces envuelve la respuesta en un fence de markdown con
+# identificador de lenguaje (```json ... ```). `str.strip("`")` solo saca
+# los backticks y deja la palabra "json" pegada al JSON, lo que hacía
+# fallar `json.loads` en la posición 0 aunque el JSON en sí fuera válido.
+_CODE_FENCE_PATTERN = re.compile(r"^```[^\n`]*\n?|\n?```\s*$")
 
 
 class OllamaLLMClient:
@@ -116,7 +123,7 @@ class OllamaLLMClient:
     def _parse_json_object(self, raw_output: str) -> dict[str, Any]:
         cleaned = raw_output.strip()
         if cleaned.startswith("```"):
-            cleaned = cleaned.strip("`")
+            cleaned = _CODE_FENCE_PATTERN.sub("", cleaned).strip()
         try:
             parsed = json.loads(cleaned)
         except json.JSONDecodeError as exc:
