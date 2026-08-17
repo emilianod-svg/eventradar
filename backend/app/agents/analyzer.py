@@ -24,6 +24,7 @@ import time
 from datetime import UTC, datetime, timedelta
 from typing import Any
 from uuid import UUID
+from zoneinfo import ZoneInfo
 
 from pydantic import ValidationError
 
@@ -56,6 +57,7 @@ class AnalyzerAgent:
             if confidence_review_threshold is None
             else confidence_review_threshold
         )
+        self._timezone = ZoneInfo(settings.timezone)
 
     async def execute(self, data: RawContentCandidate) -> list[EventCandidate]:
         started_at = time.monotonic()
@@ -102,26 +104,24 @@ class AnalyzerAgent:
             # Sección 9.2: "rechazar noticias sobre eventos pasados". El prompt
             # ya se lo pide al LLM, pero no es determinístico — se valida acá
             # como red de seguridad (caso obligatorio de la sección 18.3).
+            # El LLM a veces devuelve fechas sin offset (naive); se interpretan
+            # como hora local (`settings.timezone`, ver app/config.py:73) y se
+            # convierten a UTC, tanto para `start_at` como para `end_at` —
+            # dejar una sola de las dos sin normalizar hace que
+            # `evaluator.py` explote con
+            # `TypeError: can't compare offset-naive and offset-aware datetimes`.
             start_at = candidate.start_at
             if start_at is not None and start_at.tzinfo is None:
-                # El LLM a veces devuelve fechas sin offset; fetched_at
-                # siempre es aware, así que asumimos UTC para poder comparar.
-                # TODO(mejora futura): esto asume que la hora naive ya está en
-                # UTC, pero en la práctica el LLM suele devolver hora local del
-                # evento (ej. "20:00" pensando en horario de Argentina). Lo
-                # correcto sería interpretar el naive datetime como
-                # `settings.timezone` (America/Argentina/Cordoba, ver
-                # app/config.py:73 — hoy solo se usa para el scheduler) y
-                # convertir a UTC desde ahí, en vez de asumir que ya es UTC.
-                # Requiere zoneinfo.ZoneInfo(settings.timezone) en vez de UTC.
-                start_at = start_at.replace(tzinfo=UTC)
+                start_at = start_at.replace(tzinfo=self._timezone).astimezone(UTC)
+            end_at = candidate.end_at
+            if end_at is not None and end_at.tzinfo is None:
+                end_at = end_at.replace(tzinfo=self._timezone).astimezone(UTC)
             if start_at is not None and start_at < data.fetched_at:
                 continue
-            # El `start_at` normalizado arriba (tz-aware) debe volver al
+            # Los valores normalizados arriba (tz-aware) deben volver al
             # candidato: si se descarta acá, evaluator.py recibe el datetime
-            # naive original y `data.start_at <= self._now()` explota con
-            # `TypeError: can't compare offset-naive and offset-aware datetimes`.
-            candidate_update: dict[str, Any] = {"start_at": start_at}
+            # naive original y las comparaciones con `self._now()` explotan.
+            candidate_update: dict[str, Any] = {"start_at": start_at, "end_at": end_at}
             if candidate.confidence < self._confidence_accept_threshold:
                 candidate_update["processing_status"] = ProcessingStatus.PENDING_REVIEW
             candidate = candidate.model_copy(update=candidate_update)
