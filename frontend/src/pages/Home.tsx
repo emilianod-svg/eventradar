@@ -1,53 +1,183 @@
-import { useEffect, useRef, useState } from "react";
-import { useHealthCheck } from "../hooks/useHealthCheck";
-import { useEvents } from "../hooks/useEvents";
+import { useEffect, useMemo, useState } from "react";
 import { StatusBanner } from "../components/StatusBanner";
 import { EmptyState } from "../components/EmptyState";
 import { EventCard } from "../components/EventCard";
+import { EventFilters } from "../components/EventFilters";
+import { Pagination } from "../components/Pagination";
+import { useEvents } from "../hooks/useEvents";
+import { useHealthCheck } from "../hooks/useHealthCheck";
+
+interface EventFiltersState {
+  page: number;
+  pageSize: number;
+  query: string;
+  category: string;
+  dateFrom: string;
+  dateTo: string;
+}
+
+const DEFAULT_FILTERS: EventFiltersState = {
+  page: 1,
+  pageSize: 12,
+  query: "",
+  category: "",
+  dateFrom: "",
+  dateTo: "",
+};
+
+function readFiltersFromLocation(): EventFiltersState {
+  const params = new URLSearchParams(window.location.search);
+
+  return {
+    page: Math.max(1, Number(params.get("page") ?? DEFAULT_FILTERS.page) || DEFAULT_FILTERS.page),
+    pageSize: Math.max(1, Number(params.get("page_size") ?? DEFAULT_FILTERS.pageSize) || DEFAULT_FILTERS.pageSize),
+    query: params.get("query") ?? DEFAULT_FILTERS.query,
+    category: params.get("category") ?? DEFAULT_FILTERS.category,
+    dateFrom: params.get("date_from") ?? DEFAULT_FILTERS.dateFrom,
+    dateTo: params.get("date_to") ?? DEFAULT_FILTERS.dateTo,
+  };
+}
+
+function toIsoStart(dateInput: string): string | undefined {
+  if (!dateInput) return undefined;
+  return new Date(`${dateInput}T00:00:00`).toISOString();
+}
+
+function toIsoEnd(dateInput: string): string | undefined {
+  if (!dateInput) return undefined;
+  return new Date(`${dateInput}T23:59:59.999`).toISOString();
+}
+
+function buildLocation(filters: EventFiltersState): string {
+  const params = new URLSearchParams();
+
+  if (filters.page > 1) params.set("page", String(filters.page));
+  if (filters.pageSize !== DEFAULT_FILTERS.pageSize) params.set("page_size", String(filters.pageSize));
+  if (filters.query) params.set("query", filters.query);
+  if (filters.category) params.set("category", filters.category);
+  if (filters.dateFrom) params.set("date_from", filters.dateFrom);
+  if (filters.dateTo) params.set("date_to", filters.dateTo);
+
+  const query = params.toString();
+  return query ? `?${query}` : window.location.pathname;
+}
+
+function getEventWindowDates(filters: EventFiltersState) {
+  return {
+    dateFrom: toIsoStart(filters.dateFrom),
+    dateTo: toIsoEnd(filters.dateTo),
+  };
+}
 
 export function Home() {
-  const health = useHealthCheck();
-  const events = useEvents();
-  const [selectedEventId, setSelectedEventId] = useState<string | null>(null);
-  const closeButtonRef = useRef<HTMLButtonElement | null>(null);
+  const initialState = useMemo(() => readFiltersFromLocation(), []);
+  const [filters, setFilters] = useState<EventFiltersState>(initialState);
+  const [retryKey, setRetryKey] = useState(0);
+  const eventQuery = useMemo(
+    () => ({
+      page: filters.page,
+      pageSize: filters.pageSize,
+      query: filters.query || undefined,
+      category: filters.category || undefined,
+      ...getEventWindowDates(filters),
+    }),
+    [filters]
+  );
 
-  const selectedEvent =
-    events.status === "ready"
-      ? events.items.find((event) => event.id === selectedEventId) ?? null
-      : null;
+  const health = useHealthCheck(retryKey);
+  const events = useEvents(eventQuery, retryKey);
+
+  const categories = useMemo(() => {
+    if (events.status !== "ready") return [];
+
+    return Array.from(new Set(events.items.map((event) => event.category).filter(Boolean))) as string[];
+  }, [events]);
 
   useEffect(() => {
-    if (!selectedEvent) return;
-
-    closeButtonRef.current?.focus();
-
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") {
-        setSelectedEventId(null);
-      }
+    const onPopState = () => {
+      setFilters(readFiltersFromLocation());
     };
 
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
-  }, [selectedEvent]);
+    window.addEventListener("popstate", onPopState);
+    return () => window.removeEventListener("popstate", onPopState);
+  }, []);
+
+  useEffect(() => {
+    const nextUrl = buildLocation(filters);
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+
+    if (nextUrl !== currentUrl) {
+      window.history.replaceState(null, "", nextUrl);
+    }
+  }, [filters]);
+
+  const updateFilters = (patch: Partial<EventFiltersState>) => {
+    const nextFilters = {
+      ...filters,
+      ...patch,
+      page: patch.page ?? 1,
+    };
+    setFilters(nextFilters);
+  };
+
+  const clearFilters = () => {
+    setFilters(DEFAULT_FILTERS);
+  };
+
+  const hasActiveFilters = Boolean(filters.query || filters.category || filters.dateFrom || filters.dateTo);
+  const totalItems = events.status === "ready" ? events.total : 0;
+  const featuredEventId =
+    events.status === "ready" && events.items.length > 0
+      ? events.items.reduce((best, current) => {
+          return current.quality_score > best.quality_score ? current : best;
+        }).id
+      : null;
 
   return (
-    <main>
+    <main className="app-shell">
       <header className="app-header">
-        <h1>EventRadar</h1>
-        <p>Eventos en Posadas, Misiones</p>
+        <div className="app-header__brand">
+          <img className="app-header__logo" src="/logo.svg" alt="EventRadar" />
+          <div>
+            <p className="app-header__eyebrow">EventRadar</p>
+            <h1>Eventos en Posadas, Misiones</h1>
+          </div>
+        </div>
+        <p className="app-header__lead">
+          Explorá eventos activos, filtrá por categoría o fecha y abrí cada detalle con enlace compartible.
+        </p>
       </header>
 
-      <StatusBanner state={health} />
+      <StatusBanner state={health} onRetry={() => setRetryKey((value) => value + 1)} />
 
       {health.status === "ok" && (
         <section className="events-section" aria-labelledby="events-title">
           <div className="events-section__header">
-            <h2 id="events-title">Eventos</h2>
+            <div>
+              <h2 id="events-title">Eventos</h2>
+              {events.status === "ready" && (
+                <p>
+                  {events.total} evento{events.total === 1 ? "" : "s"} encontrado{events.total === 1 ? "" : "s"}
+                </p>
+              )}
+            </div>
             {events.status === "ready" && (
-              <p>{events.items.length} evento{events.items.length === 1 ? "" : "s"} encontrado{events.items.length === 1 ? "" : "s"}</p>
+              <p className="events-section__hint">
+                {filters.pageSize} por página · página {events.page} de {Math.max(1, Math.ceil(events.total / events.page_size))}
+              </p>
             )}
           </div>
+
+          <EventFilters
+            query={filters.query}
+            category={filters.category}
+            dateFrom={filters.dateFrom}
+            dateTo={filters.dateTo}
+            pageSize={filters.pageSize}
+            categories={categories}
+            onChange={updateFilters}
+            onReset={clearFilters}
+          />
 
           {events.status === "loading" && (
             <EmptyState
@@ -57,102 +187,50 @@ export function Home() {
           )}
 
           {events.status === "error" && (
-            <EmptyState title="No pudimos cargar los eventos" description={events.message} />
+            <EmptyState
+              title="No pudimos cargar los eventos"
+              description={events.message}
+              actionLabel="Reintentar"
+              onAction={() => setRetryKey((value) => value + 1)}
+            />
           )}
 
           {events.status === "ready" && events.items.length === 0 && (
             <EmptyState
-              title="Todavía no hay eventos cargados"
-              description="El backend está funcionando. Los eventos aparecerán acá cuando haya registros activos."
+              title={hasActiveFilters ? "No hay coincidencias" : "Todavía no hay eventos cargados"}
+              description={
+                hasActiveFilters
+                  ? "Probá limpiar filtros o ampliar el rango de fechas para ver más resultados."
+                  : "El backend está funcionando. Los eventos aparecerán acá cuando haya registros activos."
+              }
+              actionLabel={hasActiveFilters ? "Limpiar filtros" : undefined}
+              onAction={hasActiveFilters ? clearFilters : undefined}
             />
           )}
 
           {events.status === "ready" && events.items.length > 0 && (
-            <div className="events-grid">
-              {events.items.map((event) => (
-                <EventCard key={event.id} event={event} onDetail={setSelectedEventId} />
-              ))}
-            </div>
+            <>
+              <div className="events-grid">
+                {events.status === "ready" &&
+                  events.items.map((event) => (
+                  <EventCard
+                    key={event.id}
+                    event={event}
+                    detailHref={`/events/${event.slug}`}
+                    featured={event.id === featuredEventId}
+                  />
+                  ))}
+              </div>
+
+              <Pagination
+                page={events.page}
+                pageSize={events.page_size}
+                total={totalItems}
+                onPageChange={(page) => updateFilters({ page })}
+              />
+            </>
           )}
         </section>
-      )}
-
-      {selectedEvent && (
-        <div className="event-detail-backdrop" role="presentation" onClick={() => setSelectedEventId(null)}>
-          <section
-            className="event-detail-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="event-detail-title"
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              className="event-detail-modal__close"
-              ref={closeButtonRef}
-              onClick={() => setSelectedEventId(null)}
-              aria-label="Cerrar detalle"
-            >
-              ×
-            </button>
-            <p className="event-detail-modal__eyebrow">Detalle del evento</p>
-            <h2 id="event-detail-title">{selectedEvent.title}</h2>
-            <p className="event-detail-modal__meta">{selectedEvent.category ?? "Sin categoría"}</p>
-            {selectedEvent.description && <p>{selectedEvent.description}</p>}
-            <dl className="event-detail-modal__grid">
-              <div>
-                <dt>Fecha</dt>
-                <dd>{new Date(selectedEvent.start_at).toLocaleString("es-AR")}</dd>
-              </div>
-              <div>
-                <dt>Lugar</dt>
-                <dd>{selectedEvent.venue_name}</dd>
-              </div>
-              {selectedEvent.address && (
-                <div>
-                  <dt>Dirección</dt>
-                  <dd>{selectedEvent.address}</dd>
-                </div>
-              )}
-              <div>
-                <dt>Precio</dt>
-                <dd>{selectedEvent.price_text ?? "Sin información"}</dd>
-              </div>
-              <div>
-                <dt>Coordenadas</dt>
-                <dd>
-                  {selectedEvent.latitude !== null && selectedEvent.longitude !== null
-                    ? `${selectedEvent.latitude.toFixed(4)}, ${selectedEvent.longitude.toFixed(4)}`
-                    : "Sin información"}
-                </dd>
-              </div>
-              <div>
-                <dt>Estado</dt>
-                <dd>{selectedEvent.status}</dd>
-              </div>
-            </dl>
-            <div className="event-detail-modal__actions">
-              {selectedEvent.latitude !== null && selectedEvent.longitude !== null && (
-                <a
-                  className="event-detail-modal__action"
-                  href={`https://www.google.com/maps/search/?api=1&query=${selectedEvent.latitude},${selectedEvent.longitude}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  Abrir mapa
-                </a>
-              )}
-              <a
-                className="event-detail-modal__action event-detail-modal__action--secondary"
-                href={`/api/v1/events/${selectedEvent.slug}`}
-                target="_blank"
-                rel="noreferrer"
-              >
-                Abrir detalle
-              </a>
-            </div>
-          </section>
-        </div>
       )}
     </main>
   );

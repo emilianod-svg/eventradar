@@ -1,0 +1,22 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-labelledby="title desc">
+  <title id="title">EventRadar</title>
+  <desc id="desc">Logo de EventRadar con un radar y un marcador de evento.</desc>
+  <defs>
+    <linearGradient id="bg" x1="36" y1="28" x2="220" y2="228" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#EAF1FF"/>
+      <stop offset="1" stop-color="#FFFFFF"/>
+    </linearGradient>
+    <linearGradient id="ring" x1="72" y1="72" x2="184" y2="184" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0B5FFF"/>
+      <stop offset="1" stop-color="#7C3AED"/>
+    </linearGradient>
+  </defs>
+  <rect x="12" y="12" width="232" height="232" rx="56" fill="url(#bg)"/>
+  <circle cx="128" cy="128" r="72" stroke="url(#ring)" stroke-width="14" opacity="0.22"/>
+  <circle cx="128" cy="128" r="44" stroke="#0B5FFF" stroke-width="14" opacity="0.34"/>
+  <circle cx="128" cy="128" r="16" fill="#0B5FFF" opacity="0.14"/>
+  <path d="M128 68C106.461 68 89 85.461 89 107c0 34.6 39 81 39 81s39-46.4 39-81c0-21.539-17.461-39-39-39Z" fill="#0B5FFF"/>
+  <path d="M128 89c-9.941 0-18 8.059-18 18s8.059 18 18 18 18-8.059 18-18-8.059-18-18-18Z" fill="#FFFFFF"/>
+  <path d="M56 164c16.5-21 39-33 72-33 33 0 55.5 12 72 33" stroke="#0B5FFF" stroke-width="10" stroke-linecap="round" opacity="0.34"/>
+  <path d="M72 192c14-10 31-15 56-15s42 5 56 15" stroke="#7C3AED" stroke-width="10" stroke-linecap="round" opacity="0.22"/>
+</svg>

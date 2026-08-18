@@ -26,6 +26,10 @@ export interface EventItem {
   category: string | null;
   image_url: string | null;
   status: "ACTIVE" | "UPDATED" | "CANCELLED" | "ARCHIVED";
+  quality_score: number;
+  source_url: string | null;
+  source_name: string | null;
+  source_base_url: string | null;
 }
 
 export interface PaginatedEvents {

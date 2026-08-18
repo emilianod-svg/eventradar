@@ -7,7 +7,7 @@ export type HealthCheckState =
   | { status: "ok" }
   | { status: "error"; message: string };
 
-export function useHealthCheck(): HealthCheckState {
+export function useHealthCheck(refreshKey = 0): HealthCheckState {
   const [state, setState] = useState<HealthCheckState>({ status: "loading" });
 
   useEffect(() => {
@@ -27,7 +27,7 @@ export function useHealthCheck(): HealthCheckState {
       });
 
     return () => controller.abort();
-  }, []);
+  }, [refreshKey]);
 
   return state;
 }
