@@ -54,3 +54,30 @@ async def test_run_cycle_job_swallows_concurrent_execution(
     monkeypatch.setattr(jobs, "OrchestratorAgent", FakeOrchestratorConcurrent)
 
     await jobs.run_cycle_job()  # no debe propagar la excepción
+
+
+def test_build_scheduler_returns_none_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("SCHEDULER_ENABLED", "false")
+
+    assert jobs.build_scheduler() is None
+
+    get_settings.cache_clear()
+
+
+def test_build_scheduler_registers_cycle_and_watchdog_jobs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    from app.config import get_settings
+
+    get_settings.cache_clear()
+    monkeypatch.setenv("SCHEDULER_ENABLED", "true")
+
+    scheduler = jobs.build_scheduler()
+    assert scheduler is not None
+    job_ids = {job.id for job in scheduler.get_jobs()}
+    assert job_ids == {"eventradar-cycle", "eventradar-watchdog"}
+
+    get_settings.cache_clear()
