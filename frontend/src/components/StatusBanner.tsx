@@ -2,11 +2,12 @@ import type { HealthCheckState } from "../hooks/useHealthCheck";
 
 interface Props {
   state: HealthCheckState;
+  onRetry?: () => void;
 }
 
 // Estados obligatorios de la sección 15.4 del plan (loading/error) aplicados
 // al chequeo de conexión con el backend.
-export function StatusBanner({ state }: Props) {
+export function StatusBanner({ state, onRetry }: Props) {
   if (state.status === "loading") {
     return (
       <div className="status-banner status-banner--loading" role="status" aria-live="polite">
@@ -21,6 +22,11 @@ export function StatusBanner({ state }: Props) {
       <div className="status-banner status-banner--error" role="alert">
         <strong>No pudimos conectar con el backend.</strong>
         <p>{state.message}</p>
+        {onRetry && (
+          <button type="button" className="secondary-button" onClick={onRetry}>
+            Reintentar
+          </button>
+        )}
       </div>
     );
   }
