@@ -16,8 +16,8 @@ from pydantic import BaseModel
 
 from app.domain.enums import EventStatus
 from app.domain.errors import NotFoundError
-from app.models.event_source import EventSource
 from app.models.event import Event
+from app.models.event_source import EventSource
 
 router = APIRouter(prefix="/events", tags=["events"])
 
@@ -98,11 +98,10 @@ async def list_events(
     items = await qs.offset((page - 1) * page_size).limit(page_size)
     event_out_items = [EventOut.model_validate(e) for e in items]
     if event_out_items:
-        sources = (
-            await EventSource.filter(event_id__in=[event.id for event in items], is_primary=True)
-            .select_related("source")
-        )
-        source_by_event_id = {source.event_id: source for source in sources}
+        sources = await EventSource.filter(
+            event_id__in=[event.id for event in items], is_primary=True
+        ).select_related("event", "source")
+        source_by_event_id = {source.event.id: source for source in sources}
         for event_out in event_out_items:
             primary_source = source_by_event_id.get(event_out.id)
             if primary_source is not None:
