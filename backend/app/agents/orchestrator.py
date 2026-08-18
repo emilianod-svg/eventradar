@@ -120,11 +120,12 @@ class OrchestratorAgent:
             execution.status = ExecutionStatus.FAILED
             execution.error_message = str(exc)[:2000]
         finally:
-            # Libera el lock interino (migración
+            # Libera el lock (migración
             # 1_20260815042852_single_running_execution.py): al dejar de
             # estar RUNNING, la unique index parcial permite una próxima
-            # ejecución. TODO(17/08 - scheduler): sumar pg_advisory_lock de
-            # sesión cuando entre APScheduler con múltiples workers.
+            # ejecución. Si el proceso muere antes de llegar acá, el
+            # watchdog (`app/scheduler/watchdog.py`) libera la fila
+            # colgada tras EXECUTION_TIMEOUT_MINUTES.
             execution.finished_at = datetime.now(UTC)
             execution.metrics = counters
             await execution.save()

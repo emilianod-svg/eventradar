@@ -1,18 +1,20 @@
 """Repositorio de `executions` — lock de ejecución única (sección 13).
 
-Lock interino del Orquestador (sección 8.2): se apoya en la unique index
-parcial `uq_executions_single_running` (migración
-`1_20260815042852_single_running_execution.py`) para que Postgres rechace
-atómicamente una segunda fila `RUNNING`, sin necesidad de un
-check-then-insert vulnerable a carreras entre procesos.
+El lock es el índice único parcial `uq_executions_single_running`
+(migración `1_20260815042852_single_running_execution.py`): Postgres
+rechaza atómicamente una segunda fila `RUNNING`, sin necesidad de un
+check-then-insert vulnerable a carreras entre procesos, y sin necesidad de
+un `pg_advisory_lock` adicional — el índice ya es atómico entre procesos
+por sí solo (decisión final, no interina: sección 13, 17/08).
 
-TODO(17/08 - scheduler): esto cubre el caso de un solo proceso/worker de
-FastAPI. Cuando entre APScheduler con múltiples workers (sección 13), sumar
-un `pg_advisory_lock` de sesión real en `app/scheduler/locks.py` para
-serializar también el arranque del ciclo, no solo la fila en `executions`.
+`reap_abandoned` es el otro lado del lock: el watchdog (`app/scheduler/
+watchdog.py`) lo usa para liberar una fila `RUNNING` que quedó colgada
+(crash, restart) sin esperar a que alguien la cierre a mano.
 """
 
 from __future__ import annotations
+
+from datetime import UTC, datetime, timedelta
 
 from tortoise.exceptions import IntegrityError
 
@@ -36,3 +38,28 @@ class ExecutionRepository(BaseRepository[Execution]):
 
     async def get_running(self) -> Execution | None:
         return await Execution.get_or_none(status=ExecutionStatus.RUNNING)
+
+    async def reap_abandoned(self, *, timeout_minutes: int) -> Execution | None:
+        """Marca `FAILED` la ejecución `RUNNING` si superó `timeout_minutes`.
+
+        Como el índice único garantiza como máximo una fila `RUNNING` a la
+        vez, alcanza con mirar `get_running()` — no hace falta filtrar una
+        lista. Devuelve la ejecución si la marcó como abandonada, `None` si
+        no había ninguna corriendo o si todavía está dentro del timeout.
+        """
+
+        execution = await self.get_running()
+        if execution is None:
+            return None
+
+        cutoff = datetime.now(UTC) - timedelta(minutes=timeout_minutes)
+        if execution.started_at > cutoff:
+            return None
+
+        execution.status = ExecutionStatus.FAILED
+        execution.error_message = (
+            f"Ejecución abandonada: sin finalizar tras {timeout_minutes} minutos (watchdog)."
+        )
+        execution.finished_at = datetime.now(UTC)
+        await execution.save()
+        return execution

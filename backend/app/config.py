@@ -76,6 +76,14 @@ class Settings(BaseSettings):
         default="0 9 * * 1,5",
         description="Cron para el ciclo (por defecto lunes y viernes 09:00).",
     )
+    execution_timeout_minutes: int = Field(
+        default=60,
+        ge=1,
+        description=(
+            "Minutos sin finalizar tras los cuales el watchdog marca una "
+            "ejecución RUNNING como abandonada (FAILED)."
+        ),
+    )
 
     # --- Geografía base (Posadas, Misiones) ---
     base_latitude: float = Field(default=-27.3671)
@@ -87,8 +95,8 @@ class Settings(BaseSettings):
     llm_model: str | None = Field(default=None)
     llm_base_url: str | None = Field(default=None)
     llm_api_key: str | None = Field(default=None)
-    llm_max_tokens: int = Field(default=4096)
-    llm_timeout_seconds: float = Field(default=30.0)
+    llm_max_tokens: int = Field(default=8192)
+    llm_timeout_seconds: float = Field(default=60.0)
     llm_max_retries: int = Field(default=1)
 
     # --- Google Vision (OCR) ---

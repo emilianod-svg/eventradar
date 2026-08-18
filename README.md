@@ -191,7 +191,7 @@ Agrupadas:
 - **CORS y URLs públicas:** `CORS_ALLOWED_ORIGINS`, `BACKEND_PUBLIC_URL`,
   `FRONTEND_PUBLIC_URL`, `VITE_API_URL`.
 - **Seguridad interna:** `ADMIN_API_KEY`.
-- **Scheduler:** `TIMEZONE`, `SCHEDULER_ENABLED`, `SCHEDULER_CRON`.
+- **Scheduler:** `TIMEZONE`, `SCHEDULER_ENABLED`, `SCHEDULER_CRON`, `EXECUTION_TIMEOUT_MINUTES`.
 - **Geografía:** `BASE_LATITUDE`, `BASE_LONGITUDE`, `SEARCH_RADIUS_KM`.
 - **LLM:** `LLM_PROVIDER/MODEL/BASE_URL/API_KEY`, límites de tokens/timeout/reintentos.
 - **OCR:** `OCR_ENABLED`, `GOOGLE_VISION_CREDENTIALS_JSON`.
@@ -204,15 +204,24 @@ Ninguna variable de este documento ni de `.env.example` es un secreto real.
 ## 10. Scheduler y prevención de duplicados
 
 El scheduler (APScheduler, `backend/app/scheduler/`) está **deshabilitado
-por defecto** (`SCHEDULER_ENABLED=false`) y su job real depende del
-Orquestador, que todavía no está implementado. Cuando se implemente, debe
-correr como una única instancia activa (proceso separado o garantía
-equivalente — sección 19.2 del plan), nunca en cada worker de FastAPI, y
-adquirir un lock antes de iniciar un ciclo (sección 13). La prevención de
-duplicados de contenido usa el hash SHA-256 en `raw_contents` (único por
-fuente); la deduplicación de eventos usa RapidFuzz + reglas de fecha/lugar
-(sección 10 del plan) — ambas piezas son contratos en esta inicialización,
-sin lógica implementada todavía.
+por defecto** (`SCHEDULER_ENABLED=false`). Cuando está activo, corre
+in-process dentro del lifespan de FastAPI (`app/main.py`) — válido según la
+sección 19.2 del plan mientras el backend sea una única instancia (hoy
+`docker-compose.yml` levanta un solo contenedor sin `--workers`) — y
+registra dos jobs:
+
+- `eventradar-cycle`: dispara `OrchestratorAgent` según `SCHEDULER_CRON`.
+- `eventradar-watchdog`: cada 5 minutos, marca `FAILED` una ejecución
+  `RUNNING` que superó `EXECUTION_TIMEOUT_MINUTES` (crash o restart a
+  mitad de ciclo), liberando el lock para el próximo disparo.
+
+El lock de ejecución única es el índice único parcial
+`uq_executions_single_running` sobre `executions(status='RUNNING')`
+(sección 13): Postgres rechaza atómicamente una segunda fila `RUNNING`, sin
+necesidad de un `pg_advisory_lock` adicional. La prevención de duplicados
+de contenido usa el hash SHA-256 en `raw_contents` (único por fuente); la
+deduplicación de eventos usa RapidFuzz + reglas de fecha/lugar (sección 10
+del plan).
 
 ## 11. Decisiones abiertas
 
