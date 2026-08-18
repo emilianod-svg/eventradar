@@ -18,6 +18,7 @@ from app.api.v1 import router as v1_router
 from app.config import get_settings
 from app.domain.errors import AppError, error_envelope
 from app.observability import configure_logging, new_correlation_id, set_correlation_id
+from app.scheduler.jobs import build_scheduler
 from app.services.sources.bootstrap import SourceBootstrapService
 from app.services.sources.normalization import normalize_adapter_type
 from app.services.sources.validation import SourceValidationService
@@ -113,9 +114,19 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
             app.state.source_background_task = asyncio.create_task(
                 _run_source_background_tasks(app)
             )
+        scheduler = build_scheduler()
+        if scheduler is not None:
+            scheduler.start()
+            app.state.scheduler = scheduler
         logger.info("EventRadar backend iniciado (environment=%s)", settings.environment)
         yield
         await _cancel_source_background_task(app)
+        scheduler = getattr(app.state, "scheduler", None)
+        if scheduler is not None:
+            # wait=False: un ciclo puede tardar minutos, no bloqueamos el
+            # shutdown del contenedor por él. Si queda una RUNNING a mitad
+            # de camino, el watchdog del próximo arranque la limpia sola.
+            scheduler.shutdown(wait=False)
     logger.info("EventRadar backend detenido")
 
 
