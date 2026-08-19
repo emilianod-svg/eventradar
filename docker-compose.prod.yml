@@ -1,77 +1,120 @@
-# Base de producción para Donweb (sección 19 del plan). Requiere completar
-# variables reales en `.env` (NUNCA versionado) y provisionar TLS antes de
-# exponer el dominio público (ver checklist en README.md).
-name: eventradar-prod
+  # Base de producción para Donweb (sección 19 del plan). Requiere completar
+  # variables reales en `.env` (NUNCA versionado) y provisionar TLS antes de
+  # exponer el dominio público (ver checklist en README.md).
+  name: eventradar-prod
 
-services:
-  postgres:
-    image: postgres:16-alpine
-    restart: unless-stopped
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB}
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-    volumes:
-      - eventradar_postgres_data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-    networks:
-      - eventradar_internal
-    # Sin `ports:`: no se expone al host, solo accesible por la red interna.
+  services:
+    postgres:
+      image: postgres:16-alpine
+      restart: unless-stopped
+      environment:
+        POSTGRES_DB: postgres
+        POSTGRES_USER: user
+        POSTGRES_PASSWORD: password
+      ports:
+        # Expuesto solo para debug local (psql/DBeaver). Quitar si no hace falta.
+        - "5433:5432"
+      volumes:
+        - eventradar_postgres_data:/var/lib/postgresql/data
+      healthcheck:
+        test: ["CMD-SHELL", "pg_isready -U user -d postgres"]
+        interval: 10s
+        timeout: 5s
+        retries: 5
+      networks:
+        - nginx-proxy
+      # Sin `ports:`: no se expone al host, solo accesible por la red interna.
 
-  backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
-    restart: unless-stopped
-    env_file:
-      - .env
-    environment:
-      POSTGRES_HOST: postgres
-      ENVIRONMENT: production
-    depends_on:
-      postgres:
-        condition: service_healthy
-    networks:
-      - eventradar_internal
-    # Sin `ports:`: solo accesible a través de `nginx`.
+    backend:
+      build:
+        context: .././backend
+        dockerfile: Dockerfile
+      restart: unless-stopped
+      volumes:
+        - ./api/data:/data
+      env_file:
+        - .env
+      environment:
+        POSTGRES_HOST: postgres
+        ENVIRONMENT: production
+        VIRTUAL_HOST: api.eventradar.dedyn.io
+        VIRTUAL_PORT: 8000
+        LETSENCRYPT_HOST: api.eventradar.dedyn.io
+        LETSENCRYPT_EMAIL: usuario@domain.com
+      depends_on:
+        postgres:
+          condition: service_healthy
+      networks:
+        - nginx-proxy
+      # Sin `ports:`: solo accesible a través de `nginx`.
 
-  frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
-      args:
-        VITE_API_URL: ${BACKEND_PUBLIC_URL}
-    restart: unless-stopped
-    depends_on:
-      - backend
-    networks:
-      - eventradar_internal
+    frontend:
+      env_file:
+        - .env
+      build:
+        context: .././frontend
+        dockerfile: Dockerfile
+        args:
+          VITE_API_URL: http://api.eventradar.dedyn.io
+      restart: unless-stopped
+      depends_on:
+        - backend
+      networks:
+        - nginx-proxy
+      environment:
+        POSTGRES_HOST: postgres
+        ENVIRONMENT: production
+        VIRTUAL_HOST: eventradar.dedyn.io
+        VIRTUAL_PORT: 8080
+        LETSENCRYPT_HOST: eventradar.dedyn.io
+        LETSENCRYPT_EMAIL: usuario@domain.com
 
-  nginx:
-    image: nginx:1.27-alpine
-    restart: unless-stopped
-    depends_on:
-      - backend
-      - frontend
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - ./deploy/nginx:/etc/nginx/conf.d:ro
-      # Certificados TLS (ej. Certbot). No se provisionan en esta
-      # inicialización: pendiente (checklist "dominio y TLS" del informe).
-      - eventradar_certs:/etc/letsencrypt:ro
-    networks:
-      - eventradar_internal
 
-networks:
-  eventradar_internal:
-    driver: bridge
+    nginx-proxy:
+      image: jwilder/nginx-proxy
+      restart: always
+      ports:
+        - "80:80"
+        - "443:443"
+      volumes:
+        - conf:/etc/nginx/conf.d
+        - vhost:/etc/nginx/vhost.d
+        - dhparam:/etc/nginx/dhparam
+        - certs:/etc/nginx/certs:ro
+        - /var/run/docker.sock:/tmp/docker.sock:ro
+      networks:
+        - nginx-proxy
 
-volumes:
-  eventradar_postgres_data:
-  eventradar_certs:
+    letsencrypt:
+      image: nginxproxy/acme-companion
+      container_name: nginx-proxy-le
+      volumes_from:
+        - nginx-proxy
+      volumes:
+        - certs:/etc/nginx/certs:rw
+        - /var/run/docker.sock:/var/run/docker.sock:ro
+      restart: always
+
+    ollama:
+      image: ollama/ollama
+      container_name: ollama
+      ports:
+        - "11434:11434"
+      volumes:
+        - ollama:/root/.ollama
+      restart: unless-stopped
+      networks:
+        - nginx-proxy
+
+  networks:
+    nginx-proxy:
+      external: true
+
+  volumes:
+    eventradar_postgres_data:
+    eventradar_certs:
+    conf:
+    vhost:
+    dhparam:
+    certs:
+    ollama:
