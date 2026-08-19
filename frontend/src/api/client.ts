@@ -23,9 +23,16 @@ export function getApiBaseUrl(): string {
   return API_BASE_URL;
 }
 
-export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> {
+interface ApiRequestOptions {
+  signal?: AbortSignal;
+  headers?: HeadersInit;
+  body?: BodyInit | null;
+  method?: string;
+}
+
+export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
   const base = resolveBaseUrl();
-  const response = await fetch(`${base}${path}`, { signal });
+  const response = await fetch(`${base}${path}`, options);
   if (!response.ok) {
     let message = `Error ${response.status} al consultar ${path}`;
     try {
@@ -37,4 +44,24 @@ export async function apiGet<T>(path: string, signal?: AbortSignal): Promise<T> 
     throw new Error(message);
   }
   return (await response.json()) as T;
+}
+
+export async function apiGet<T>(path: string, signal?: AbortSignal, headers?: HeadersInit): Promise<T> {
+  return apiRequest<T>(path, { signal, headers, method: "GET" });
+}
+
+export async function apiPost<T>(
+  path: string,
+  body?: unknown,
+  options: Omit<ApiRequestOptions, "body" | "method"> = {}
+): Promise<T> {
+  return apiRequest<T>(path, {
+    ...options,
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(options.headers ?? {}),
+    },
+    body: body === undefined ? null : JSON.stringify(body),
+  });
 }

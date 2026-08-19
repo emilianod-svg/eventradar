@@ -4,8 +4,12 @@ import { EmptyState } from "../components/EmptyState";
 import { EventCard } from "../components/EventCard";
 import { EventFilters } from "../components/EventFilters";
 import { Pagination } from "../components/Pagination";
+import { CyclePanel } from "../components/CyclePanel";
+import { startCycle } from "../api/cycles";
 import { useEvents } from "../hooks/useEvents";
 import { useHealthCheck } from "../hooks/useHealthCheck";
+import { useCycles } from "../hooks/useCycles";
+import { ApiConfigurationError } from "../api/client";
 
 interface EventFiltersState {
   page: number;
@@ -15,6 +19,8 @@ interface EventFiltersState {
   dateFrom: string;
   dateTo: string;
 }
+
+type HomeTab = "events" | "cycles";
 
 const DEFAULT_FILTERS: EventFiltersState = {
   page: 1,
@@ -72,7 +78,11 @@ function getEventWindowDates(filters: EventFiltersState) {
 export function Home() {
   const initialState = useMemo(() => readFiltersFromLocation(), []);
   const [filters, setFilters] = useState<EventFiltersState>(initialState);
+  const [activeTab, setActiveTab] = useState<HomeTab>("events");
   const [retryKey, setRetryKey] = useState(0);
+  const [adminApiKey, setAdminApiKey] = useState(() => window.localStorage.getItem("eventradar-admin-api-key") ?? "");
+  const [cycleRefreshKey, setCycleRefreshKey] = useState(0);
+  const [isStartingCycle, setIsStartingCycle] = useState(false);
   const eventQuery = useMemo(
     () => ({
       page: filters.page,
@@ -86,6 +96,7 @@ export function Home() {
 
   const health = useHealthCheck(retryKey);
   const events = useEvents(eventQuery, retryKey);
+  const cycles = useCycles(adminApiKey, cycleRefreshKey);
 
   const categories = useMemo(() => {
     if (events.status !== "ready") return [];
@@ -111,6 +122,14 @@ export function Home() {
     }
   }, [filters]);
 
+  useEffect(() => {
+    if (adminApiKey.trim()) {
+      window.localStorage.setItem("eventradar-admin-api-key", adminApiKey.trim());
+    } else {
+      window.localStorage.removeItem("eventradar-admin-api-key");
+    }
+  }, [adminApiKey]);
+
   const updateFilters = (patch: Partial<EventFiltersState>) => {
     const nextFilters = {
       ...filters,
@@ -122,6 +141,24 @@ export function Home() {
 
   const clearFilters = () => {
     setFilters(DEFAULT_FILTERS);
+  };
+
+  const handleStartCycle = async () => {
+    if (!adminApiKey.trim()) return;
+
+    setIsStartingCycle(true);
+    try {
+      await startCycle(adminApiKey.trim());
+      setCycleRefreshKey((value) => value + 1);
+    } catch (error: unknown) {
+      if (error instanceof ApiConfigurationError) {
+        window.alert(error.message);
+        return;
+      }
+      window.alert(error instanceof Error ? error.message : "No se pudo correr el ciclo.");
+    } finally {
+      setIsStartingCycle(false);
+    }
   };
 
   const hasActiveFilters = Boolean(filters.query || filters.category || filters.dateFrom || filters.dateTo);
@@ -150,88 +187,126 @@ export function Home() {
 
       <StatusBanner state={health} onRetry={() => setRetryKey((value) => value + 1)} />
 
-      {health.status === "ok" && (
-        <section className="events-section" aria-labelledby="events-title">
-          <div className="events-section__header">
-            <div>
-              <h2 id="events-title">Eventos</h2>
-              {events.status === "ready" && (
-                <p>
-                  {events.total} evento{events.total === 1 ? "" : "s"} encontrado{events.total === 1 ? "" : "s"}
-                </p>
-              )}
-            </div>
-            {events.status === "ready" && (
-              <p className="events-section__hint">
-                {filters.pageSize} por página · página {events.page} de {Math.max(1, Math.ceil(events.total / events.page_size))}
-              </p>
-            )}
-          </div>
+      <section className="home-tabs" aria-label="Secciones principales">
+        <div className="home-tabs__list" role="tablist" aria-label="Vista principal">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "events"}
+            className={activeTab === "events" ? "home-tabs__tab home-tabs__tab--active" : "home-tabs__tab"}
+            onClick={() => setActiveTab("events")}
+          >
+            Eventos
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={activeTab === "cycles"}
+            className={activeTab === "cycles" ? "home-tabs__tab home-tabs__tab--active" : "home-tabs__tab"}
+            onClick={() => setActiveTab("cycles")}
+          >
+            Ciclos
+          </button>
+        </div>
 
-          <EventFilters
-            query={filters.query}
-            category={filters.category}
-            dateFrom={filters.dateFrom}
-            dateTo={filters.dateTo}
-            pageSize={filters.pageSize}
-            categories={categories}
-            onChange={updateFilters}
-            onReset={clearFilters}
-          />
-
-          {events.status === "loading" && (
-            <EmptyState
-              title="Cargando eventos"
-              description="Estamos consultando el backend para traer los eventos disponibles."
-            />
-          )}
-
-          {events.status === "error" && (
-            <EmptyState
-              title="No pudimos cargar los eventos"
-              description={events.message}
-              actionLabel="Reintentar"
-              onAction={() => setRetryKey((value) => value + 1)}
-            />
-          )}
-
-          {events.status === "ready" && events.items.length === 0 && (
-            <EmptyState
-              title={hasActiveFilters ? "No hay coincidencias" : "Todavía no hay eventos cargados"}
-              description={
-                hasActiveFilters
-                  ? "Probá limpiar filtros o ampliar el rango de fechas para ver más resultados."
-                  : "El backend está funcionando. Los eventos aparecerán acá cuando haya registros activos."
-              }
-              actionLabel={hasActiveFilters ? "Limpiar filtros" : undefined}
-              onAction={hasActiveFilters ? clearFilters : undefined}
-            />
-          )}
-
-          {events.status === "ready" && events.items.length > 0 && (
-            <>
-              <div className="events-grid">
-                {events.status === "ready" &&
-                  events.items.map((event) => (
-                  <EventCard
-                    key={event.id}
-                    event={event}
-                    detailHref={`/events/${event.slug}`}
-                    featured={event.id === featuredEventId}
-                  />
-                  ))}
+        <div role="tabpanel" hidden={activeTab !== "events"}>
+          {activeTab === "events" && health.status === "ok" && (
+            <section className="events-section" aria-labelledby="events-title">
+              <div className="events-section__header">
+                <div>
+                  <h2 id="events-title">Eventos</h2>
+                  {events.status === "ready" && (
+                    <p>
+                      {events.total} evento{events.total === 1 ? "" : "s"} encontrado{events.total === 1 ? "" : "s"}
+                    </p>
+                  )}
+                </div>
+                {events.status === "ready" && (
+                  <p className="events-section__hint">
+                    {filters.pageSize} por página · página {events.page} de {Math.max(1, Math.ceil(events.total / events.page_size))}
+                  </p>
+                )}
               </div>
 
-              <Pagination
-                page={events.page}
-                pageSize={events.page_size}
-                total={totalItems}
-                onPageChange={(page) => updateFilters({ page })}
+              <EventFilters
+                query={filters.query}
+                category={filters.category}
+                dateFrom={filters.dateFrom}
+                dateTo={filters.dateTo}
+                pageSize={filters.pageSize}
+                categories={categories}
+                onChange={updateFilters}
+                onReset={clearFilters}
               />
-            </>
+
+              {events.status === "loading" && (
+                <EmptyState
+                  title="Cargando eventos"
+                  description="Estamos consultando el backend para traer los eventos disponibles."
+                />
+              )}
+
+              {events.status === "error" && (
+                <EmptyState
+                  title="No pudimos cargar los eventos"
+                  description={events.message}
+                  actionLabel="Reintentar"
+                  onAction={() => setRetryKey((value) => value + 1)}
+                />
+              )}
+
+              {events.status === "ready" && events.items.length === 0 && (
+                <EmptyState
+                  title={hasActiveFilters ? "No hay coincidencias" : "Todavía no hay eventos cargados"}
+                  description={
+                    hasActiveFilters
+                      ? "Probá limpiar filtros o ampliar el rango de fechas para ver más resultados."
+                      : "El backend está funcionando. Los eventos aparecerán acá cuando haya registros activos."
+                  }
+                  actionLabel={hasActiveFilters ? "Limpiar filtros" : undefined}
+                  onAction={hasActiveFilters ? clearFilters : undefined}
+                />
+              )}
+
+              {events.status === "ready" && events.items.length > 0 && (
+                <>
+                  <div className="events-grid">
+                    {events.items.map((event) => (
+                      <EventCard
+                        key={event.id}
+                        event={event}
+                        detailHref={`/events/${event.slug}`}
+                        featured={event.id === featuredEventId}
+                      />
+                    ))}
+                  </div>
+
+                  <Pagination
+                    page={events.page}
+                    pageSize={events.page_size}
+                    total={totalItems}
+                    onPageChange={(page) => updateFilters({ page })}
+                  />
+                </>
+              )}
+            </section>
           )}
-        </section>
-      )}
+        </div>
+
+        <div role="tabpanel" hidden={activeTab !== "cycles"}>
+          {activeTab === "cycles" && (
+            <CyclePanel
+              adminApiKey={adminApiKey}
+              onAdminApiKeyChange={setAdminApiKey}
+              state={cycles}
+              onStartCycle={handleStartCycle}
+              onRefresh={() => setCycleRefreshKey((value) => value + 1)}
+              isStarting={isStartingCycle}
+              refreshKey={cycleRefreshKey}
+            />
+          )}
+        </div>
+      </section>
     </main>
   );
 }
