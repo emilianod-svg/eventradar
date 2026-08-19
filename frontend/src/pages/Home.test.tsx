@@ -46,6 +46,73 @@ const EVENTS = [
   },
 ] as const;
 
+const CYCLES = [
+  {
+    id: "11111111-1111-1111-1111-111111111111",
+    status: "RUNNING",
+    triggered_by: "manual",
+    started_at: "2026-08-18T10:00:00Z",
+    finished_at: null,
+    metrics: {
+      sources_processed: 1,
+      sources_failed: 0,
+      items_collected: 12,
+      items_failed: 1,
+      events_accepted: 3,
+      events_merged: 1,
+      events_reviewed: 2,
+      events_rejected: 1,
+      events_archived: 0,
+    },
+    error_message: null,
+  },
+  {
+    id: "22222222-2222-2222-2222-222222222222",
+    status: "FAILED",
+    triggered_by: "scheduler",
+    started_at: "2026-08-17T09:00:00Z",
+    finished_at: "2026-08-17T09:04:30Z",
+    metrics: {
+      sources_processed: 0,
+      sources_failed: 2,
+      items_collected: 0,
+      items_failed: 0,
+      events_accepted: 0,
+      events_merged: 0,
+      events_reviewed: 0,
+      events_rejected: 0,
+      events_archived: 0,
+    },
+    error_message: "No se pudo conectar con la fuente RSS",
+  },
+] as const;
+
+const CYCLE_DETAIL = {
+  ...CYCLES[0],
+  sources: [
+    {
+      id: "5e39d411-ea7b-4748-a46e-b303adc52d06",
+      source_id: "52471566-1b72-405e-bb91-0643da26af89",
+      status: "COMPLETED",
+      items_collected: 1,
+      items_accepted: 0,
+      error_message: null,
+      duration_ms: 2382.669589998841,
+    },
+    {
+      id: "3dd0136e-0482-45f1-b3af-202beccd52c5",
+      source_id: "b7d4fba6-ae03-4481-9776-fb7d5e35ace6",
+      status: "FAILED",
+      items_collected: 0,
+      items_accepted: 0,
+      error_message: "No se pudo descargar la página en https://ticketmisiones.com/eventos-por-ciudad?ciudad=Posadas.",
+      duration_ms: 188.18774600003962,
+    },
+  ],
+};
+
+let fetchMock: ReturnType<typeof vi.fn>;
+
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -76,11 +143,24 @@ function applyFilters(url: URL) {
   return { items, page, page_size: pageSize, total };
 }
 
-function mockFetch(input: RequestInfo | URL) {
-  const url = new URL(String(input), "http://localhost");
+function mockFetch(input: RequestInfo | URL, init?: RequestInit) {
+  const url = input instanceof Request ? new URL(input.url) : new URL(String(input), "http://localhost");
+  const method = input instanceof Request ? input.method : init?.method ?? "GET";
 
   if (url.pathname.endsWith("/health")) {
     return Promise.resolve(jsonResponse({ status: "ok" }));
+  }
+
+  if (url.pathname === "/api/v1/internal/cycles") {
+    if (method === "POST") {
+      return Promise.resolve(jsonResponse(CYCLE_DETAIL, 201));
+    }
+
+    return Promise.resolve(jsonResponse(CYCLES));
+  }
+
+  if (url.pathname === `/api/v1/internal/cycles/${CYCLES[0].id}`) {
+    return Promise.resolve(jsonResponse(CYCLE_DETAIL));
   }
 
   if (url.pathname.startsWith("/api/v1/events/") && url.pathname.split("/").length > 4) {
@@ -100,7 +180,9 @@ function mockFetch(input: RequestInfo | URL) {
 describe("App", () => {
   beforeEach(() => {
     window.history.replaceState(null, "", "/");
-    vi.stubGlobal("fetch", vi.fn(mockFetch));
+    window.localStorage.clear();
+    fetchMock = vi.fn(mockFetch);
+    vi.stubGlobal("fetch", fetchMock);
   });
 
   afterEach(() => {
@@ -153,5 +235,37 @@ describe("App", () => {
 
     await waitFor(() => expect(screen.getByText(/Feria gastronómica de invierno/i)).toBeInTheDocument());
     expect(screen.queryByText(/46a Fiesta Nacional del Inmigrante/i)).not.toBeInTheDocument();
+  });
+
+  it("muestra el panel de ciclos y permite disparar uno", async () => {
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByText(/Backend conectado correctamente/i)).toBeInTheDocument());
+
+    fireEvent.click(screen.getByRole("tab", { name: /Ciclos/i }));
+    fireEvent.change(screen.getByLabelText(/API key admin/i), { target: { value: "admin-key" } });
+
+    await waitFor(() => expect(screen.getByText(/11111111/i)).toBeInTheDocument());
+    expect(screen.getAllByText(/En ejecución/i).length).toBeGreaterThanOrEqual(2);
+    expect(screen.getByText(/^Fallido$/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /11111111/i }));
+
+    await waitFor(() => expect(screen.getByRole("dialog")).toBeInTheDocument());
+    expect(screen.getByText(/Ciclo 11111111/i)).toBeInTheDocument();
+    expect(screen.getByText(/52471566/i)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: /Cerrar detalle/i }));
+
+    fireEvent.click(screen.getByRole("button", { name: /Fallidos primero/i }));
+
+    await waitFor(() => {
+      expect(document.querySelector(".cycles-list .cycle-row")?.textContent).toContain("22222222");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: /Correr ciclo/i }));
+
+    await waitFor(() => expect(fetchMock.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
+    expect(fetchMock.mock.calls.some(([input]) => String(input).includes(`/api/v1/internal/cycles/${CYCLES[0].id}`))).toBe(true);
   });
 });
