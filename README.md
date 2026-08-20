@@ -1,64 +1,104 @@
 # EventRadar
 
-Sistema inteligente de centralización y recomendación de eventos locales —
-**Posadas, Misiones**. Este repositorio contiene la base inicial del MVP:
-backend en FastAPI, frontend en Vite + React + TypeScript, y la
-infraestructura Docker/CI necesaria para desarrollarlo y desplegarlo.
+Sistema multiagente que convierte publicaciones dispersas de portales locales en
+eventos estructurados, deduplicados y geolocalizados para **Posadas, Misiones**.
 
-> La fuente de verdad funcional y arquitectónica completa es
-> [`EventRadar_Plan_Completo-v1.md`](./EventRadar_Plan_Completo-v1.md). Este
-> README resume lo operativo; ante cualquier duda de alcance o reglas de
-> negocio, el plan tiene precedencia.
+| Recurso | URL |
+|---|---|
+| Aplicación web | http://eventradar.dedyn.io |
+| API | http://api.eventradar.dedyn.io |
+| Estado del servicio | http://api.eventradar.dedyn.io/health |
+| Documentación de la API | http://api.eventradar.dedyn.io/docs |
 
-## Estado de esta inicialización
+> Usar `http://`, no `https://`. El certificado TLS todavía no fue emitido para
+> estos dominios; forzar HTTPS produce un error de handshake
+> (`tlsv1 unrecognized name`). Es la corrección pendiente de mayor prioridad.
 
-Este repositorio fue inicializado siguiendo el
-[`PROMPT_INICIALIZACION_EVENTRADAR.md`](./PROMPT_INICIALIZACION_EVENTRADAR.md).
-**No implementa todavía la lógica de scraping, LLM, OCR, geocodificación ni
-deduplicación** — eso es intencional. Lo que sí existe y funciona:
+## Qué hace
 
-- Backend FastAPI con configuración tipada, `/health`, `/ready`,
-  `/api/v1/events`, `/api/v1/categories` y `/api/v1/internal/sources`
-  (CRUD real contra PostgreSQL).
-- Modelos Tortoise ORM completos del modelo de datos del plan (sección 11).
-- Contratos tipados de los 7 agentes (sección 8) y de los servicios externos
-  (LLM, OCR, geocoding, matching, scoring), todos como *stubs* que fallan
-  explícitamente en vez de simular resultados.
-- Frontend con pantalla inicial, chequeo real de `/health`, estados
-  loading/error/vacío y accesibilidad base.
-- Docker, Docker Compose (dev y prod) y CI en GitHub Actions.
+La información sobre qué pasa en Posadas está dispersa en notas de portales de
+noticias, feeds RSS y páginas de la municipalidad, con fechas escritas en
+lenguaje natural («el próximo sábado», «del 3 al 13 de septiembre»), lugares
+nombrados de forma ambigua («Auditorium Montoya») y sin coordenadas.
 
-Ver el informe de inicialización (compartido junto con este README) para el
-detalle de validaciones ejecutadas, pendientes P0/P1/P2 y recursos externos
-que el equipo debe conseguir.
+EventRadar recolecta esas publicaciones, extrae los eventos con un modelo de
+lenguaje, resuelve la ubicación consultando varios geocodificadores, decide con
+reglas auditables si el evento se acepta, se fusiona con uno existente, se manda
+a revisión o se descarta, y aprende qué fuentes le sirven. Todo lo publicado
+conserva la trazabilidad completa hasta el texto que lo originó.
 
-## 1. Propósito y alcance P0
+Estado actual en producción: **13 eventos activos** extraídos de publicaciones
+reales, dentro de un radio de 15 km del centro de Posadas.
 
-Convertir publicaciones públicas heterogéneas (webs estáticas, Facebook) en
-eventos estructurados, geolocalizados y consultables vía API/cards, con
-trazabilidad completa y aprendizaje de confiabilidad por fuente. El alcance
-P0 completo está detallado en la sección 4.1 del plan; en resumen: 5 fuentes
-configuradas, al menos 3 procesadas por ciclo, extracción con LLM + OCR,
-geocodificación con radio, deduplicación con RapidFuzz, persistencia
-trazable, scheduler con lock único, API paginada y frontend de cards.
+## Arquitectura
 
-### Arquitectura resumida
+Monolito modular: los agentes son módulos de un mismo proceso FastAPI
+(`backend/app/agents/`), no microservicios. Las integraciones externas están
+detrás de interfaces en `backend/app/services/` y `backend/app/sources/`.
 
-Monolito modular: los agentes (Orquestador, Descubridor, Recolector,
-Analizador, Clasificador Geográfico, Evaluador, Persistencia) son módulos de
-`backend/app/agents/`, no microservicios. Las integraciones externas (LLM,
-OCR, geocoding, fuentes web) están detrás de interfaces en
-`backend/app/services/` y `backend/app/sources/`. Ver diagrama en la
-sección 6 del plan.
+```
+Fuentes RSS/HTML
+      │
+      ▼
+[Recolector]      hash SHA-256, descarta lo ya visto        → raw_contents
+      │
+      ▼
+[Analizador]      IA · LLM vía Ollama, prompt analyzer-v3   → classifications
+      │
+      ▼
+[Clasificador     IA · catálogo local → Nominatim →
+ Geográfico]      LocationIQ → Geoapify, consenso 2/300 m
+      │
+      ▼
+[Evaluador]       RapidFuzz + reglas duras, sin LLM
+      │           → ACCEPT / MERGE / REVIEW / REJECT        → evaluation_decisions
+      ▼
+[Persistencia]    transacción única + scoring bayesiano     → events, source_score_history
+      │
+      └──► el reliability_score aprendido condiciona el ciclo siguiente
 
-## 2. Requisitos previos
+Todo el ciclo lo secuencia el [Orquestador], que aísla fallos por fuente y por item.
+```
+
+| Agente | Naturaleza | Qué decide |
+|---|---|---|
+| Orquestador | Determinista | Si puede iniciarse un ciclo (lock), qué fuentes procesar y cómo aislar cada fallo |
+| Recolector | Determinista | Qué contenido es nuevo, antes de gastar una llamada al LLM |
+| Analizador | **IA (LLM)** | Si un texto describe eventos, cuántos y con qué confianza |
+| Clasificador Geográfico | **IA + reglas** | Dónde ocurre el evento, con consenso entre proveedores |
+| Evaluador | Determinista | Aceptar, fusionar, mandar a revisión o rechazar |
+| Persistencia y Aprendizaje | Determinista | Qué se escribe y cómo cambia la confiabilidad de cada fuente |
+| Descubridor de Fuentes | *No implementado* | Quedó fuera de alcance; el Orquestador funciona sin él |
+
+Solo dos de los seis agentes implementados usan modelos. Toda la lógica de
+decisión es determinista y deja registro explicable de cada elección.
+
+Diagramas completos (arquitectura, flujo de agentes, UML de secuencia, clases y
+casos de uso) en `report/entrega/diagramas/`, con su código Mermaid.
+
+## Stack
+
+| Componente | Tecnología |
+|---|---|
+| Frontend | React 18 + TypeScript 5.6 + Vite 5.4 |
+| Backend | Python 3.11 + FastAPI 0.115 |
+| ORM y migraciones | Tortoise ORM 0.21 + Aerich |
+| Base de datos | PostgreSQL 16 |
+| Modelo de IA | Cliente Ollama · modelo `minimax-m3` (alojado, no local) |
+| Geocodificación | Catálogo propio + Nominatim + LocationIQ + Geoapify |
+| Deduplicación | RapidFuzz 3.9 + reglas de fecha y ubicación |
+| Planificación | APScheduler 3.10 in-process + watchdog |
+| Despliegue | Docker Compose · Oracle Cloud · nginx-proxy |
+| CI | GitHub Actions (lint, tipos, tests, build, auditoría, gitleaks) |
+
+## Requisitos
 
 - Python 3.11 o 3.12
 - Node.js 20+
-- Docker y Docker Compose v2 (para el flujo con contenedores)
+- Docker y Docker Compose v2
 - PostgreSQL 16 (si se corre el backend sin Docker)
 
-## 3. Inicio rápido con Docker Compose
+## Inicio rápido con Docker Compose
 
 ```bash
 cp .env.example .env
@@ -66,27 +106,20 @@ cp .env.example .env
 docker compose up --build
 ```
 
-- Backend: http://localhost:8000
 - Frontend: http://localhost:5173
-- PostgreSQL: localhost:5432 (expuesto solo para debug local)
+- Backend: http://localhost:8000
+- PostgreSQL: localhost:5433 (expuesto solo para debug local)
 
-> Este comando no se pudo ejecutar en el entorno de inicialización porque no
-> tiene Docker disponible. Ver el informe de inicialización, sección
-> "Validaciones ejecutadas", para el detalle exacto de qué se validó y qué
-> falta correr en una máquina con Docker.
-
-## 4. Inicio local sin Docker
+## Inicio local sin Docker
 
 ### Backend
 
 ```bash
 cd backend
 python3 -m venv .venv
-source .venv/bin/activate   # Windows: .venv\Scripts\activate
+source .venv/bin/activate
 pip install -e ".[dev]"
-cp ../.env.example ../.env  # completar valores
-# con PostgreSQL corriendo localmente y DATABASE_URL/.env apuntando a él:
-aerich init-db                            # una sola vez (crea tabla aerich y primera migración)
+aerich upgrade                 # aplica las migraciones
 uvicorn app.main:app --reload
 ```
 
@@ -94,192 +127,171 @@ uvicorn app.main:app --reload
 
 ```bash
 cd frontend
-npm install   # genera package-lock.json si no existe (ver pendientes)
+npm install
 npm run dev
 ```
 
-El frontend lee `VITE_API_URL` desde el `.env` de la **raíz** del
-repositorio (`vite.config.ts` tiene `envDir: ".."`), no desde
-`frontend/.env`.
+El frontend lee `VITE_API_URL` desde el `.env` de la **raíz** del repositorio
+(`vite.config.ts` define `envDir: ".."`), no desde `frontend/.env`.
 
-## 5. Migraciones y seed
+## Correr un ciclo completo
 
-Las migraciones se administran con Aerich (ver
-[`backend/migrations/README.md`](./backend/migrations/README.md)). No se
-generó la migración inicial en esta inicialización por falta de acceso a
-PostgreSQL en el entorno de scaffolding; es el primer paso pendiente P0.
+Por API (requiere la credencial administrativa):
 
-El seed de fuentes vive en [`data/seed_sources.json`](./data/seed_sources.json)
-con las 5 fuentes decididas en el plan, `active: false` y `base_url: null`
-hasta confirmar URLs reales (no se inventaron). Cargarlas vía
-`POST /api/v1/internal/sources` una vez confirmadas. Ver
-[`data/README.md`](./data/README.md) para los datasets de evaluación
-todavía pendientes.
+```bash
+curl -X POST http://localhost:8000/api/v1/internal/cycles -H "X-Admin-Api-Key: $ADMIN_API_KEY"
+```
 
-## 6. Comandos de lint, tests, type checking y build
+Por línea de comandos:
 
-### Backend (`cd backend`)
+```bash
+cd backend && ../.venv/bin/python scripts/run_cycle_once.py
+```
 
-| Comando | Qué hace |
-|---|---|
-| `ruff check .` | Lint |
-| `ruff format --check .` | Formato |
-| `mypy app` | Type checking |
-| `pytest` | Tests (unitarios + integración si `TEST_DATABASE_URL` está definida) |
+También puede dispararse desde la pestaña **Ciclos** del frontend, cargando la
+credencial administrativa. El scheduler automático está deshabilitado por
+defecto (`SCHEDULER_ENABLED=false`); cuando se activa corre según
+`SCHEDULER_CRON` (por defecto, lunes y viernes a las 09:00).
 
-### Frontend (`cd frontend`)
+Otros comandos disponibles:
 
-| Comando | Qué hace |
-|---|---|
-| `npm run lint` | ESLint |
-| `npm run typecheck` | `tsc --noEmit` |
-| `npm test` | Vitest |
-| `npm run build` | Build de producción (incluye type checking) |
+```bash
+cd backend
+../.venv/bin/python scripts/seed_sources.py         # carga el catálogo de fuentes
+../.venv/bin/python scripts/validate_sources.py     # verifica que las fuentes respondan
+../.venv/bin/python scripts/eval_geo_dataset.py     # evalúa la geolocalización contra el dataset
+../.venv/bin/python scripts/eval_duplicates_dataset.py
+```
 
-## 7. URLs y endpoints
+## Endpoints
 
-| Entorno | Backend | Frontend |
+| Método | Ruta | Descripción |
 |---|---|---|
-| Local (sin Docker) | http://localhost:8000 | http://localhost:5173 |
-| Docker Compose (dev) | http://localhost:8000 | http://localhost:5173 |
-| Producción (pendiente) | https://eventradar.net.ar/api | https://eventradar.net.ar |
+| GET | `/health` | Estado del proceso (no consulta la base) |
+| GET | `/ready` | Verifica la conexión a PostgreSQL |
+| GET | `/api/v1/events` | Listado paginado con filtros `query`, `category`, `date_from`, `date_to` |
+| GET | `/api/v1/events/{id-o-slug}` | Detalle de un evento con su fuente |
+| GET | `/api/v1/categories` | Categorías activas — **defecto conocido: devuelve 500** |
+| GET/POST/PATCH | `/api/v1/internal/sources` | Administración de fuentes |
+| POST/GET | `/api/v1/internal/cycles` | Dispara un ciclo · lista ejecuciones y métricas |
+| GET | `/api/v1/internal/reviews` | Cola de revisión manual |
+| GET | `/docs`, `/openapi.json` | Documentación autogenerada |
 
-- `GET /health` — estado del proceso (no depende de la base).
-- `GET /ready` — verifica PostgreSQL.
-- `GET /api/v1/events`, `GET /api/v1/events/{id-or-slug}` — API pública.
-- `GET /api/v1/categories` — categorías activas.
-- `GET/POST/PATCH /api/v1/internal/*` — API interna, requiere header
-  `X-Admin-Api-Key` con el valor de `ADMIN_API_KEY`.
-- OpenAPI/Swagger autogenerado por FastAPI: `/docs` y `/openapi.json`
-  (deshabilitar `/docs` en producción si el equipo lo decide así — no
-  configurado explícitamente todavía).
+Las rutas `/api/v1/internal/*` requieren el encabezado `X-Admin-Api-Key`.
 
-## 8. Estructura de carpetas
+## Tests y calidad
+
+```bash
+cd backend
+ruff check . && ruff format --check .
+mypy app
+TEST_DATABASE_URL=postgres://... pytest      # 153 tests, 83 % de cobertura
+```
+
+```bash
+cd frontend
+npm run lint && npm run typecheck && npm test && npm run build
+```
+
+Sin `TEST_DATABASE_URL` los tests de integración se omiten. Los tests de humo
+contra el LLM real requieren además `RUN_LLM_SMOKE_TESTS=1`.
+
+La integración continua (`.github/workflows/ci.yml`) corre en cada pull request:
+lint, tipos y tests del backend contra un PostgreSQL real, lint/tipos/tests/build
+del frontend, build de ambas imágenes Docker, `pip-audit`, `npm audit` y
+escaneo de secretos con `gitleaks`.
+
+## Configuración
+
+Ver `.env.example` para el listado completo y comentado. Los umbrales de
+decisión son variables de entorno, de modo que ajustar la severidad del sistema
+no requiere volver a desplegar:
+
+| Variable | Valor por defecto | Efecto |
+|---|---|---|
+| `CONFIDENCE_REVIEW_THRESHOLD` | 0.50 | Por debajo, el candidato se rechaza |
+| `CONFIDENCE_ACCEPT_THRESHOLD` | 0.70 | Entre ambos, se acepta marcado para revisión |
+| `DUPLICATE_REVIEW_THRESHOLD` | 0.75 | A partir de aquí va a revisión humana |
+| `DUPLICATE_AUTO_MERGE_THRESHOLD` | 0.90 | Fusión automática, si además coinciden fecha y lugar |
+| `GEO_CONFIDENCE_REVIEW_THRESHOLD` | 0.75 | Por debajo, queda en `pending_review` |
+| `SEARCH_RADIUS_KM` | 15 | Distancia máxima al centro de Posadas |
+| `SCHEDULER_ENABLED` | false | Activa el ciclo automático |
+
+La configuración se valida al arrancar: umbrales incoherentes entre sí, CORS en
+`*` o `ADMIN_API_KEY` ausente en producción hacen fallar el proceso en el
+arranque, no en tiempo de request.
+
+## Seguridad
+
+- Ningún secreto versionado: `.env` está en `.gitignore`; `gitleaks` corre en CI.
+- Las rutas internas exigen `X-Admin-Api-Key`, comparada con `hmac.compare_digest`.
+  Verificado en producción: sin credencial devuelven 401.
+- El contenido web se inserta en el prompt delimitado y marcado explícitamente
+  como dato, nunca como instrucción (defensa contra prompt injection).
+- Antes de seguir la URL de origen de un evento se rechazan destinos privados,
+  loopback, link-local, reservados y multicast (defensa contra SSRF).
+- No hay cuentas de usuario final ni datos personales: solo información pública
+  de eventos.
+
+Pendientes conocidos: no hay limitación de tasa, `/docs` está abierto en
+producción, la credencial administrativa se guarda en `localStorage` del
+navegador, el tráfico va sin cifrar y el cliente HTTP escribe las claves de los
+geocodificadores en los logs. Todos están documentados en el informe de entrega.
+
+## Limitaciones conocidas
+
+- **Sin HTTPS**: el certificado TLS no fue emitido para los dominios del proyecto.
+- **`GET /api/v1/categories` devuelve 500**: la consulta combina `DISTINCT` con
+  un ordenamiento no incluido en la proyección. No afecta a la interfaz, que
+  deriva las categorías del listado de eventos.
+- **La cola de revisión no se puede resolver**: `POST /reviews/{id}/approve` y
+  `/reject` devuelven 501, declarados y no implementados.
+- **Sin OCR y sin Facebook**: ambos previstos en el diseño y deshabilitados por
+  configuración. Los eventos publicados solo como imagen no se detectan.
+- **El modelo no corre localmente**: el cliente es Ollama, pero `minimax-m3` se
+  ejecuta en infraestructura remota. Es un esquema híbrido.
+- **La fusión de duplicados es parcial**: completa campos vacíos, pero no aplica
+  la regla de preferir el dato de la fuente más confiable campo por campo.
+
+## Estructura del repositorio
 
 ```text
 eventradar/
-├── backend/            # FastAPI + Tortoise ORM + Aerich
+├── backend/
 │   ├── app/
-│   │   ├── api/        # routers públicos (/health, /ready) e internos (/api/v1)
-│   │   ├── agents/      # contratos de los 7 agentes del plan (stubs)
-│   │   ├── domain/      # entidades, enums, errores compartidos
-│   │   ├── models/      # modelos Tortoise (sección 11 del plan)
+│   │   ├── agents/        # los 6 agentes implementados + el contrato del 7.º
+│   │   ├── api/           # /health, /ready y /api/v1
+│   │   ├── domain/        # entidades, enums y errores compartidos
+│   │   ├── models/        # modelos Tortoise (11 tablas)
 │   │   ├── repositories/
-│   │   ├── services/    # llm/ocr/geocoding/matching/scoring (interfaces)
-│   │   ├── sources/      # adaptadores scrapy/playwright/facebook (stubs)
-│   │   ├── scheduler/    # APScheduler (deshabilitado por defecto)
-│   │   └── security/     # autenticación admin de rutas internas
+│   │   ├── services/      # llm/, geocoding/, matching/, scoring/, sources/
+│   │   ├── sources/       # adaptadores RSS, Scrapy, Playwright, Facebook
+│   │   ├── scheduler/     # APScheduler + watchdog
+│   │   └── security/      # autenticación de las rutas internas
 │   ├── migrations/
-│   └── tests/
-├── frontend/            # Vite + React + TypeScript
-│   └── src/{api,components,hooks,pages,styles,types}
-├── data/                # seed de fuentes y datasets de evaluación (pendientes)
-├── deploy/nginx/        # reverse proxy de producción
-├── .github/workflows/   # CI
-├── docker-compose.yml       # desarrollo local
-├── docker-compose.prod.yml  # base de producción (Donweb)
+│   ├── scripts/
+│   └── tests/             # unit, integration, e2e, smoke
+├── frontend/src/          # api, components, hooks, pages, styles, types
+├── data/                  # catálogo de fuentes, catálogo geográfico, datasets
+├── db/                    # utilidades SQL
+├── deploy/nginx/
+├── report/                # documentación de la entrega (no forma parte del sistema)
+├── docker-compose.yml
+├── docker-compose.prod.yml
 └── .env.example
 ```
 
-## 9. Variables de entorno
+## Contribuir
 
-Ver [`.env.example`](./.env.example) para el listado completo y comentado.
-Agrupadas:
+Ramas cortas y pull request contra `develop`. Antes de abrir el PR:
 
-- **Aplicación:** `APP_NAME`, `ENVIRONMENT`, `LOG_LEVEL`.
-- **PostgreSQL:** `POSTGRES_HOST/PORT/DB/USER/PASSWORD`, `DATABASE_URL`.
-- **CORS y URLs públicas:** `CORS_ALLOWED_ORIGINS`, `BACKEND_PUBLIC_URL`,
-  `FRONTEND_PUBLIC_URL`, `VITE_API_URL`.
-- **Seguridad interna:** `ADMIN_API_KEY`.
-- **Scheduler:** `TIMEZONE`, `SCHEDULER_ENABLED`, `SCHEDULER_CRON`, `EXECUTION_TIMEOUT_MINUTES`.
-- **Geografía:** `BASE_LATITUDE`, `BASE_LONGITUDE`, `SEARCH_RADIUS_KM`.
-- **LLM:** `LLM_PROVIDER/MODEL/BASE_URL/API_KEY`, límites de tokens/timeout/reintentos.
-- **OCR:** `OCR_ENABLED`, `GOOGLE_VISION_CREDENTIALS_JSON`.
-- **Geocodificación:** `NOMINATIM_ENABLED`, `NOMINATIM_BASE_URL/USER_AGENT/CONTACT_EMAIL/RATE_LIMIT_SECONDS`, `LOCATIONIQ_ENABLED/API_KEY/BASE_URL`, `GEOAPIFY_ENABLED/API_KEY/BASE_URL`, `GEOCODING_PROVIDER_ORDER`, `GEOCODING_TIMEOUT_SECONDS`, `GEOCODING_CACHE_TTL_SECONDS`, `GEOCODING_NEGATIVE_CACHE_TTL_SECONDS`, `GEO_CONFIDENCE_*`.
-- **IA:** `AI_MONTHLY_BUDGET_USD`.
-- **Flags experimentales:** `ENABLE_EXPERIMENTAL_ADAPTERS`, `ENABLE_FACEBOOK_ADAPTER`.
+1. `ruff check . && ruff format --check . && mypy app && pytest` en `backend/`
+2. `npm run lint && npm run typecheck && npm test && npm run build` en `frontend/`
+3. Confirmar que no se versionan secretos
 
-Ninguna variable de este documento ni de `.env.example` es un secreto real.
+## Equipo
 
-## 10. Scheduler y prevención de duplicados
+- **Paulo Cabrera** — Desarrollador Fullstack
+- **Emiliano Domínguez** — Desarrollador Fullstack
 
-El scheduler (APScheduler, `backend/app/scheduler/`) está **deshabilitado
-por defecto** (`SCHEDULER_ENABLED=false`). Cuando está activo, corre
-in-process dentro del lifespan de FastAPI (`app/main.py`) — válido según la
-sección 19.2 del plan mientras el backend sea una única instancia (hoy
-`docker-compose.yml` levanta un solo contenedor sin `--workers`) — y
-registra dos jobs:
-
-- `eventradar-cycle`: dispara `OrchestratorAgent` según `SCHEDULER_CRON`.
-- `eventradar-watchdog`: cada 5 minutos, marca `FAILED` una ejecución
-  `RUNNING` que superó `EXECUTION_TIMEOUT_MINUTES` (crash o restart a
-  mitad de ciclo), liberando el lock para el próximo disparo.
-
-El lock de ejecución única es el índice único parcial
-`uq_executions_single_running` sobre `executions(status='RUNNING')`
-(sección 13): Postgres rechaza atómicamente una segunda fila `RUNNING`, sin
-necesidad de un `pg_advisory_lock` adicional. La prevención de duplicados
-de contenido usa el hash SHA-256 en `raw_contents` (único por fuente); la
-deduplicación de eventos usa RapidFuzz + reglas de fecha/lugar (sección 10
-del plan).
-
-## 11. Decisiones abiertas
-
-- **Llama:** proveedor y modelo exactos sin definir (sección 3.1 del plan).
-  El cliente está detrás de `app/services/llm/base.py` para poder cambiar
-  de proveedor sin tocar el Agente Analizador.
-- **Facebook:** no es una fuente garantizada hasta una prueba técnica real;
-  el adaptador (`app/sources/facebook_adapter.py`) está deshabilitado por
-  `ENABLE_FACEBOOK_ADAPTER=false` hasta cerrar estrategia (sección 3.2).
-- **Donweb:** sin acceso SSH, plan ni datos de servidor confirmados. El
-  `docker-compose.prod.yml` y `deploy/nginx/` son una base, no un despliegue
-  probado.
-
-## 12. Estrategia CI/CD
-
-`.github/workflows/ci.yml` corre en cada PR y push a `main`: lint/type
-checking/tests de backend con PostgreSQL como service container,
-lint/typecheck/tests/build de frontend, build (sin push) de ambas imágenes
-Docker, auditoría de dependencias (`pip-audit`, `npm audit`) y escaneo de
-secretos (`gitleaks`). No hay CD configurado: falta información de
-credenciales/registry/Donweb (ver informe de inicialización, checklist de
-recursos). Cuando el equipo la tenga, se debe agregar un workflow de
-despliegue manual/aprobado, no automático sin revisión.
-
-## 13. Troubleshooting básico
-
-| Síntoma | Causa probable | Acción |
-|---|---|---|
-| `/ready` responde `degraded` | PostgreSQL no accesible | Verificar `DATABASE_URL`/`POSTGRES_*` y que el contenedor/servicio esté arriba |
-| `ConfigurationError: ADMIN_API_KEY` | Falta la variable | Definir `ADMIN_API_KEY` en `.env` |
-| `ExternalServiceNotConfiguredError` en agentes | LLM/OCR/Nominatim/Facebook sin configurar | Esperado en esta inicialización; completar credenciales cuando el equipo las tenga |
-| `aerich` error: "ConnectionRefusedError" | PostgreSQL no accesible o `DATABASE_URL` incorrecto | Verificar que PostgreSQL esté arriba y que `.aerichrc` y `.env` tengan la URL correcta |
-| Frontend no encuentra `VITE_API_URL` | `.env` no copiado o `envDir` incorrecto | Confirmar que `.env` existe en la raíz del repo, no en `frontend/` |
-| `npm ci` falla en CI | Falta `package-lock.json` versionado | Correr `npm install` localmente una vez y commitear el lockfile (pendiente P0) |
-
-## 14. Seguridad y manejo de secretos
-
-- Ningún secreto se versiona; `.env` está en `.gitignore` y `.claudeignore`.
-- Rutas internas requieren `X-Admin-Api-Key` (`app/security/admin_auth.py`);
-  fallan explícitamente si `ADMIN_API_KEY` no está configurada.
-- CORS restringido por configuración; se rechaza `*` en `ENVIRONMENT=production`.
-- Los adaptadores externos (LLM, OCR, geocoding, fuentes) fallan de forma
-  explícita si no tienen credenciales, en vez de responder silenciosamente.
-- Pendiente (fuera de alcance de esta inicialización): rate limiting real de
-  endpoints administrativos, sanitización de contenido externo, protección
-  SSRF en el Recolector — todos mencionados en la sección 16 del plan y a
-  implementar junto con los agentes correspondientes.
-
-## 15. Cómo contribuir y Definition of Done
-
-Trunk-based development sobre `main` (sección 2.2 del plan). Antes de abrir
-un PR:
-
-1. `ruff check . && ruff format --check . && mypy app && pytest` en `backend/`.
-2. `npm run lint && npm run typecheck && npm test && npm run build` en `frontend/`.
-3. Confirmar que no se versionan secretos (`git diff --cached` + revisión manual).
-
-Una tarea está terminada (sección 21 del plan) cuando cumple su criterio de
-aceptación, tiene tests adecuados, no contiene secretos, pasa CI, tiene logs
-comprensibles, su configuración está documentada y no deja `TODO` que
-bloqueen el flujo P0.
+Proyecto final de *Inteligencia Artificial Aplicada a Organizaciones* — UTN FRBA.
