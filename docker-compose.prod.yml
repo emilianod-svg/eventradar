@@ -82,6 +82,7 @@
         - dhparam:/etc/nginx/dhparam
         - certs:/etc/nginx/certs:ro
         - /var/run/docker.sock:/tmp/docker.sock:ro
+        - html:/usr/share/nginx/html
       networks:
         - nginx-proxy
 
@@ -118,3 +119,4 @@
     dhparam:
     certs:
     ollama:
+    html:
