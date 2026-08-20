@@ -1,0 +1,62 @@
+# Desarrollo/integración local. No usar tal cual en producción (ver
+# docker-compose.prod.yml y deploy/).
+name: eventradar-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-eventradar}
+      POSTGRES_USER: ${POSTGRES_USER:-eventradar}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-change-me-local-only}
+    ports:
+      # Expuesto solo para debug local (psql/DBeaver). Quitar si no hace falta.
+      - "5433:5432"
+    volumes:
+      - eventradar_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-eventradar} -d ${POSTGRES_DB:-eventradar}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - eventradar_internal
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: postgres
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    networks:
+      - eventradar_internal
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    restart: unless-stopped
+    depends_on:
+      - backend
+    ports:
+      - "5173:8080"
+    networks:
+      - eventradar_internal
+
+networks:
+  eventradar_internal:
+    driver: bridge
+
+volumes:
+  eventradar_postgres_data:
